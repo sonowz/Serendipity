@@ -1,5 +1,5 @@
 
-function getRandomRecipe(table)
+function getRandomRecipe(subgroup)
 	math.randomseed(1253634)	--should make random seed
 
 	local n = 0
