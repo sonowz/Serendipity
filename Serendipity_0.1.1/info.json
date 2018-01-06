@@ -6,6 +6,6 @@
   "contact": "-contact",
   "homepage": "-homepage",
   "description": "Make science pack recipe random",
-  "factorio_version": "0.14", 
-  "dependencies": ["boblibrary >= 0.12.2"]
+  "factorio_version": "0.16", 
+  "dependencies": ["boblibrary >= 0.16.1"]
 }

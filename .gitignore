@@ -1,0 +1,9 @@
+# whitelist except these directories
+*
+!*/
+!/Serendipity*/**
+!/boblibrary*/**
+!.gitignore
+
+# other files
+!README.md
