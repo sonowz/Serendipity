@@ -32,8 +32,25 @@ script.on_configuration_changed(function()
     -- TODO: Add recipe setting
 end)
 
+
+
+require("classes.IngredientCost")
+require("classes.RecipeRequirement")
+
+local materials = {"iron", "copper"}
+local cost1 = IngredientCost:new(materials, {1, 0, 1, 1})
+local cost2 = IngredientCost:new(materials, {0, 1, 1, 1})
+local cost3 = IngredientCost:new(materials, {1, 1, 1, 1})
+local min_req = IngredientCost:new(materials, {5, 3, 10, 1})
+local req = RecipeRequirement:new()
+req.min_req = min_req
+local ret = req:total_fit({cost1, cost2, cost3})
+local str = ""
+if ret then str = table.tostring(ret) else str = "nil" end
+
 script.on_event(defines.events.on_player_crafted_item, function(event)
     local player = game.players[event.player_index]
-    player.print(table.tostring(global.temp_ingredients))
-    player.print(tostring(global.randomseed))
+    --player.print(table.tostring(global.temp_ingredients))
+    --player.print(tostring(global.randomseed))
+    player.print(str)
 end)
