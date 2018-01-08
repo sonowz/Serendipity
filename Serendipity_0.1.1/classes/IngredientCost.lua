@@ -5,21 +5,24 @@ IngredientCost = {}
 IngredientCost.__index = IngredientCost
 
 
-function IngredientCost:new(materials, array)
+function IngredientCost:new(materials, table)
     local obj = {}
     for i, material in ipairs(materials) do
-        if array then
-            obj[material] = array[i]
+        if table and table[material] then
+            obj[material] = table[material]
         else
             obj[material] = 0.0
         end
     end
-    if array then
-        obj["time"] = array[#array-1]
-        obj["depth"] = array[#array]
+    if table and table["time"] then
+        obj["time"] = table["time"]
     else
-        obj["time"] = 0.0
-        obj["depth"] = 0.0
+        obj["time"] = 1.0
+    end
+    if table and table["depth"] then
+        obj["depth"] = table["depth"]
+    else
+        obj["depth"] = 1.0
     end
     return setmetatable(obj, IngredientCost)
 end
@@ -66,11 +69,9 @@ end
 
 function IngredientCost:keys(no_depth)
     local keyset = {}
-    local n = 1
     for k, _ in pairs(self) do
         if not (no_depth and k == "depth") then
-            keyset[n] = k
-            n = n + 1
+            table.insert(keyset, k)
         end
     end
     return keyset

@@ -1,14 +1,29 @@
+-- https://forums.factorio.com/viewtopic.php?f=6&t=4397
+-- author: DaveMcW 
+
+
 --package.path = package.path .. ';data/core/lualib/?.lua;data/base/?.lua'
 --require "dataloader"
 --require "data.base.data" 
+require("devutil")
+
+use_expensive_recipe = false
 
 function getIngredients(recipe)
    local ingredients = {}
-   for i,ingredient in pairs(recipe.ingredients) do
-      if (ingredient.name and ingredient.amount) then
-         ingredients[ingredient.name] = ingredient.amount
-      elseif (ingredient[1] and ingredient[2]) then
-         ingredients[ingredient[1]] = ingredient[2]
+   if recipe.ingredients then
+      for i,ingredient in pairs(recipe.ingredients) do
+          if (ingredient.name and ingredient.amount) then
+            ingredients[ingredient.name] = ingredient.amount
+          elseif (ingredient[1] and ingredient[2]) then
+            ingredients[ingredient[1]] = ingredient[2]
+          end
+      end
+   elseif recipe.normal then
+      if use_expensive_recipe and recipe.expensive then
+         return getIngredients(recipe.expensive)
+      else
+         return getIngredients(recipe.normal)
       end
    end
    return ingredients
@@ -28,10 +43,18 @@ function getProducts(recipe)
          amount = recipe.result_count
       end
       products[recipe.result] = amount
+   elseif recipe.normal then
+      if use_expensive_recipe and recipe.expensive then
+         return getProducts(recipe.expensive)
+      else
+         return getProducts(recipe.normal)
+      end
    end
    return products
 end
 
+-- original function
+--[[
 function getRecipes(item)
    local recipes = {}
    for i,recipe in pairs(data.raw.recipe) do
@@ -44,8 +67,9 @@ function getRecipes(item)
    end
    return recipes
 end
+--]]
 
-function getRawIngredients(recipe, exclude)
+function getRawIngredients(recipe, exclude, recipes_of_item)
    local raw_ingredients = {}
    for name,amount in pairs(getIngredients(recipe)) do
       -- Do not use an item as its own ingredient 
@@ -61,27 +85,29 @@ function getRawIngredients(recipe, exclude)
       -- There might be more than one recipe to choose from
       local subrecipes = {}
       local loop_error = nil
-      for i,subrecipe in pairs(getRecipes(name)) do
-         local subingredients = getRawIngredients(subrecipe, excluded_ingredients)
-         if (subingredients.ERROR_INFINITE_LOOP) then
-            loop_error = subingredients.ERROR_INFINITE_LOOP
-         else
-            local value = 0
-            for subproduct,subamount in pairs(getProducts(subrecipe)) do
-               value = value + subamount
-            end
+      if recipes_of_item[name] then
+        for i,subrecipe in pairs(recipes_of_item[name]) do
+          local subingredients = getRawIngredients(subrecipe, excluded_ingredients, recipes_of_item)
+          if (subingredients.ERROR_INFINITE_LOOP) then
+              loop_error = subingredients.ERROR_INFINITE_LOOP
+          else
+              local value = 0
+              for subproduct,subamount in pairs(getProducts(subrecipe)) do
+                value = value + subamount
+              end
 
-            local divisor = 0
-            for subingredient,subamount in pairs(subingredients) do
-               divisor = divisor + subamount
-            end
+              local divisor = 0
+              for subingredient,subamount in pairs(subingredients) do
+                divisor = divisor + subamount
+              end
 
-            if (divisor == 0) then divisor = 1 end
+              if (divisor == 0) then divisor = 1 end
 
-            table.insert(subrecipes, {recipe = subrecipe, ingredients = subingredients, value = value / divisor})
-         end
+              table.insert(subrecipes, {recipe = subrecipe, ingredients = subingredients, value = value / divisor})
+          end
+        end
       end
-      
+
       if (#subrecipes == 0) then
          if (loop_error and loop_error ~= name) then
             -- This branch of the recipe tree is invalid
@@ -105,18 +131,28 @@ function getRawIngredients(recipe, exclude)
             end
          end
 
-         local multiple = 0
-         for subname,subamount in pairs(getProducts(best_recipe.recipe)) do
-            multiple = multiple + subamount
-         end
-
-         for subname,subamount in pairs(best_recipe.ingredients) do
-            if (raw_ingredients[subname]) then
-               raw_ingredients[subname] = raw_ingredients[subname] + amount * subamount / multiple
-            else
-               raw_ingredients[subname] = amount * subamount / multiple
+         if best_recipe then
+            local multiple = 0
+            for subname,subamount in pairs(getProducts(best_recipe.recipe)) do
+                multiple = multiple + subamount
             end
-         end 
+
+            local best_recipe_ingredients = best_recipe.ingredients
+            if best_recipe.normal then
+              if use_expensive_recipe and best_recipe.expensive then
+                best_recipe_ingredients = best_recipe.expensive.ingredients
+              else
+                best_recipe_ingredients = best_recipe.normal.ingredients
+              end
+            end
+            for subname,subamount in pairs(best_recipe_ingredients) do
+                if (raw_ingredients[subname]) then
+                  raw_ingredients[subname] = raw_ingredients[subname] + amount * subamount / multiple
+                else
+                  raw_ingredients[subname] = amount * subamount / multiple
+                end
+            end 
+         end
       end
    end
 
@@ -127,3 +163,20 @@ function round(num, idp)
   return tonumber(string.format("%." .. (idp or 0) .. "f", num))
 end
 
+--[[
+for recipename,recipe in pairs(data.raw.recipe) do
+   local exclude = {}
+   for product,amount in pairs(getProducts(recipe)) do
+      exclude[product] = true
+   end
+   local ingredients = getRawIngredients(recipe, exclude)
+   if (ingredients.ERROR_INFINITE_LOOP) then
+      ingredients = getIngredients(recipe)
+   end
+   print("[u]" .. recipename .. "[/u]")
+   for name,amount in pairs(ingredients) do
+      print(round(amount, 1) .. "x " .. name)
+   end
+   print ""
+end
+--]]

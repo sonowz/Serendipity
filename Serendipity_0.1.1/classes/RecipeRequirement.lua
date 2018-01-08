@@ -72,6 +72,8 @@ function RecipeRequirement:_find_min_count(ing_costs)
             temp_keys[n] = ing_keys[i]
             temp_r[n] = min_req[i]
             n = n + 1
+        elseif min_req[i][1] ~= 0.0 then -- requirement can't be satisfied
+            return nil
         end
     end
     mat = matrix:new(temp_mat)
@@ -81,19 +83,20 @@ function RecipeRequirement:_find_min_count(ing_costs)
     -- find left inverse
     local transpose = matrix.transpose(mat)
     local inverted = matrix.invert(transpose * mat)
-    if not inverted then end -- TODO: singular case
+    if not inverted then return nil end -- TODO: singular case
     local left_inverse = inverted * transpose
 
     -- (x y z)^-1 * r
     local m_r = left_inverse * min_req
     local epsilon = matrix:new(matrix.rows(m_r), matrix.columns(m_r), 1E-6) -- consider error from inverse
-    
+
     -- TODO: prove '(x y z)^-1 * r <= (a b c)^t' holds when (x y z) is indefinite (maybe because a,b,c >= 1)
     -- find minimum a,b,c <= n
     local solution = {}
     for i, row in ipairs(m_r - epsilon) do
         solution[i] = math.max(math.ceil(row[1]), 1)
-        if solution[i] > self.max_ingredient_count then return nil end -- TODO: make recursive call
+        -- disable to debug easily
+        --if solution[i] > self.max_ingredient_count then return nil end -- TODO: make recursive call
     end
     
     -- check if solution satisfies ax + by + cz + ... <= nr
@@ -104,6 +107,6 @@ function RecipeRequirement:_find_min_count(ing_costs)
             if x < 0.0 then return nil end
         end
     end
-    
+
     return solution
 end

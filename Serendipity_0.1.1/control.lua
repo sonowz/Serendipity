@@ -38,10 +38,10 @@ require("classes.IngredientCost")
 require("classes.RecipeRequirement")
 
 local materials = {"iron", "copper"}
-local cost1 = IngredientCost:new(materials, {1, 0, 1, 1})
-local cost2 = IngredientCost:new(materials, {0, 1, 1, 1})
-local cost3 = IngredientCost:new(materials, {1, 1, 1, 1})
-local min_req = IngredientCost:new(materials, {5, 3, 10, 1})
+local cost1 = IngredientCost:new(materials, {iron=1, copper=0, time=1, depth=1})
+local cost2 = IngredientCost:new(materials, {iron=0, copper=1, time=1, depth=1})
+local cost3 = IngredientCost:new(materials, {iron=1, copper=1, time=1, depth=1})
+local min_req = IngredientCost:new(materials, {iron=5, copper=3, time=10, depth=1})
 local req = RecipeRequirement:new()
 req.min_req = min_req
 local ret = req:total_fit({cost1, cost2, cost3})
