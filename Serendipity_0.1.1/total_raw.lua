@@ -7,7 +7,8 @@
 --require "data.base.data" 
 require("devutil")
 
-use_expensive_recipe = false
+total_raw = {}
+total_raw.use_expensive_recipe = false
 
 function getIngredients(recipe)
    local ingredients = {}
@@ -20,7 +21,7 @@ function getIngredients(recipe)
           end
       end
    elseif recipe.normal then
-      if use_expensive_recipe and recipe.expensive then
+      if total_raw.use_expensive_recipe and recipe.expensive then
          return getIngredients(recipe.expensive)
       else
          return getIngredients(recipe.normal)
@@ -44,7 +45,7 @@ function getProducts(recipe)
       end
       products[recipe.result] = amount
    elseif recipe.normal then
-      if use_expensive_recipe and recipe.expensive then
+      if total_raw.use_expensive_recipe and recipe.expensive then
          return getProducts(recipe.expensive)
       else
          return getProducts(recipe.normal)
@@ -69,7 +70,7 @@ function getRecipes(item)
 end
 --]]
 
-function getRawIngredients(recipe, exclude, recipes_of_item)
+function getRawIngredients(recipe, exclude, recipe_of_item)
    local raw_ingredients = {}
    for name,amount in pairs(getIngredients(recipe)) do
       -- Do not use an item as its own ingredient 
@@ -85,9 +86,9 @@ function getRawIngredients(recipe, exclude, recipes_of_item)
       -- There might be more than one recipe to choose from
       local subrecipes = {}
       local loop_error = nil
-      if recipes_of_item[name] then
-        for i,subrecipe in pairs(recipes_of_item[name]) do
-          local subingredients = getRawIngredients(subrecipe, excluded_ingredients, recipes_of_item)
+      if recipe_of_item[name] then
+        for i,subrecipe in pairs(recipe_of_item[name]) do
+          local subingredients = getRawIngredients(subrecipe, excluded_ingredients, recipe_of_item)
           if (subingredients.ERROR_INFINITE_LOOP) then
               loop_error = subingredients.ERROR_INFINITE_LOOP
           else
@@ -139,7 +140,7 @@ function getRawIngredients(recipe, exclude, recipes_of_item)
 
             local best_recipe_ingredients = best_recipe.ingredients
             if best_recipe.normal then
-              if use_expensive_recipe and best_recipe.expensive then
+              if total_raw.use_expensive_recipe and best_recipe.expensive then
                 best_recipe_ingredients = best_recipe.expensive.ingredients
               else
                 best_recipe_ingredients = best_recipe.normal.ingredients

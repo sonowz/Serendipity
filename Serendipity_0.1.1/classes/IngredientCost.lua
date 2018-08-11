@@ -5,13 +5,13 @@ IngredientCost = {}
 IngredientCost.__index = IngredientCost
 
 
-function IngredientCost:new(materials, table)
+function IngredientCost:new(resources, table)
   local obj = {}
-  for i, material in ipairs(materials) do
-    if table and table[material] then
-      obj[material] = table[material]
+  for i, resource in ipairs(resources) do
+    if table and table[resource] then
+      obj[resource] = table[resource]
     else
-      obj[material] = 0.0
+      obj[resource] = 0.0
     end
   end
   if table and table["time"] then

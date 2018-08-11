@@ -11,9 +11,9 @@ function RecipeRequirement:new()
   local obj = {}
   obj.min_req = nil -- IngredientCost class
   obj.weight = nil  -- IngredientCost class
-  obj.material_weight = 1.0 -- don't need to change
-  obj.max_req_material = 0.0 -- max material cost sum (iron, copper, ...)
-  obj.max_req_total = 0.0    -- max total cost sum (material, time, depth)
+  obj.resource_weight = 1.0 -- don't need to change
+  obj.max_req_resource = 0.0 -- max resource cost sum (iron, copper, ...)
+  obj.max_req_total = 0.0    -- max total cost sum (resource, time, depth)
                              -- depth = average depth among ingredients
   obj.tech_req = {} -- list of science packs (TODO: blacklist or whitelist?)
   obj.max_ingredient_count = 5 -- max possible count of ingredient (ex: 5x iron plate) 

@@ -6,18 +6,25 @@ require("classes.RecipeRequirement")
 -- main TODOs
 -- preprocess recipes (remove too cheap/expensive, filter non-craftable, tech restriction)
 -- maximum requirement
+-- auto setting sync
+-- force override setting? in desync message
 
--- used in "total_raw"
-use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
+-- Configs
+-- auto seed randomization (use map seed?) (seems hard)
+-- use resources unincluded in pack recipe (might error)
+-- difficulty (0.5x, 1x, 2x, ...)
+
+total_raw.use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
 
 item_names = {} -- array of item names
-recipes_of_item = {} -- table of (item name) -> (recipe)
-recipe_cost = {}  -- table of (recipe name) -> (recipe raw cost)
-materials = {}
+recipe_of_item = {} -- table of (item name) -> (recipe)
+cost_of_recipe = {}  -- table of (recipe name) -> (recipe raw cost)
+resources = {} -- 'iron ore', 'coal', ...
 
-materials_blacklist = {}
+resources_blacklist = {}
 
 function init_tables(recipes)
+  -- recipe_of_item
   local contained_items = {}
   for recipename, recipe in pairs(recipes) do
     for product, _ in pairs(getProducts(recipe)) do
@@ -25,39 +32,42 @@ function init_tables(recipes)
         contained_items[product] = true
         table.insert(item_names, product)
       end
-      if not recipes_of_item[product] then
-        recipes_of_item[product] = {}
+      if not recipe_of_item[product] then
+        recipe_of_item[product] = {}
       end
-      table.insert(recipes_of_item[product], recipe)
+      table.insert(recipe_of_item[product], recipe)
     end
   end
+  -- cost_of_recipe
   for recipename, recipe in pairs(recipes) do
     local exclude = {}
     for product,amount in pairs(getProducts(recipe)) do
       exclude[product] = true
     end
-    local ingredients = getRawIngredients(recipe, exclude, recipes_of_item)
+    local ingredients = getRawIngredients(recipe, exclude, recipe_of_item)
     if (ingredients.ERROR_INFINITE_LOOP) then
       ingredients = getIngredients(recipe)
     end
-    recipe_cost[recipename] = ingredients
+    cost_of_recipe[recipename] = ingredients
   end
-  local contained_materials = {}
-  for _, material in ipairs(materials_blacklist) do
-    contained_materials[material] = true
+
+  --resources
+  local contained_resources = {}
+  for _, resource in ipairs(resources_blacklist) do
+    contained_resources[resource] = true
   end
-  for _, costs in pairs(recipe_cost) do
+  for _, costs in pairs(cost_of_recipe) do
     if costs then
-      for material, _ in pairs(costs) do
-        if not contained_materials[material] then
-          contained_materials[material] = true
-          table.insert(materials, material)
+      for resource, _ in pairs(costs) do
+        if not contained_resources[resource] then
+          contained_resources[resource] = true
+          table.insert(resources, resource)
         end
       end
     end
   end
-  --flog(materials)
-  --flog(recipe_cost)
+  --flog(resources)
+  --flog(cost_of_recipe)
 end
 
 
@@ -85,7 +95,7 @@ function getRandomItems(num)
 end
 
 
-function set_ingredients(requirement, selected_materials, science_pack_recipe)	
+function set_ingredients(requirement, selected_resources, science_pack_recipe)	
   local final_ingredients = {}
   local has_fluid = false
   while true do
@@ -95,8 +105,8 @@ function set_ingredients(requirement, selected_materials, science_pack_recipe)
     local costs = {}
     -- TODO: consider multiple amount recipe
     for i, ingredient in ipairs(ingredients) do
-      local recipename = recipes_of_item[ingredient][1].name -- TODO: fix
-      costs[i] = IngredientCost:new(selected_materials, recipe_cost[recipename])
+      local recipename = recipe_of_item[ingredient][1].name -- TODO: fix
+      costs[i] = IngredientCost:new(selected_resources, cost_of_recipe[recipename])
     end
     
     local amounts = requirement:total_fit(costs)
@@ -132,7 +142,7 @@ function main()
   math.randomseed(settings.startup["serendipity-randomseed"].value)
 
   -- TODO: fix
-  selected_materials = {
+  selected_resources = {
     "copper-ore",
     "iron-ore",
     "stone",
@@ -153,12 +163,12 @@ function main()
   for _, science_pack_name in ipairs(science_packs) do
     flog("Find ingredients: "..science_pack_name)
     local requirement = RecipeRequirement.new()
-    if recipes_of_item[science_pack_name] then
-      local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
-      local pack_cost = IngredientCost:new(selected_materials, recipe_cost[pack_recipename])
+    if recipe_of_item[science_pack_name] then
+      local pack_recipename = recipe_of_item[science_pack_name][1].name -- TODO: fix
+      local pack_cost = IngredientCost:new(selected_resources, cost_of_recipe[pack_recipename])
       requirement.min_req = pack_cost
 
-      set_ingredients(requirement, selected_materials, data.raw.recipe[pack_recipename])
+      set_ingredients(requirement, selected_resources, data.raw.recipe[pack_recipename])
     end
   end
 end
