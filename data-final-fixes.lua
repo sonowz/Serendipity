@@ -4,7 +4,7 @@ require("classes.IngredientCost")
 require("classes.RecipeRequirement")
 
 -- main TODOs
--- preprocess recipes (remove too cheap/expensive, filter non-craftable)
+-- preprocess recipes (remove too cheap/expensive)
 -- maximum requirement
 -- auto setting sync
 -- force override setting? in desync message
@@ -183,9 +183,17 @@ function generate_filtered_recipes(pack_to_candidates)
   end
   for _, item_name in pairs(filtered_items) do
     for _, pack in pairs(science_packs) do
-      
       if not item_requires[item_name] then -- It is unlocked from start
-        table.insert(pack_to_candidates[pack], item_name)
+        -- TODO: basic filter of non-craftable
+        -- Needs thorough filtering of items & recipes from beginning of the mod
+        if recipes_of_item[item_name] then
+          for _, recipe in ipairs(recipes_of_item[item_name]) do
+            if recipe.enabled == nil or recipe.enabled == true then
+              table.insert(pack_to_candidates[pack], item_name)
+              break
+            end
+          end
+        end
       elseif not item_requires[item_name][pack] then -- Tech tree validated
         table.insert(pack_to_candidates[pack], item_name)
       end
