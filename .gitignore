@@ -1,8 +1,0 @@
-# whitelist except these directories
-*
-!*/
-!/Serendipity*/**
-!.gitignore
-
-# other files
-!README.md
