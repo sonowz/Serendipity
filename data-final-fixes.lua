@@ -1,10 +1,10 @@
-require("total_raw")
+require("total-raw")
 require("devutil")
 require("classes.IngredientCost")
 require("classes.RecipeRequirement")
 
 -- main TODOs
--- preprocess recipes (remove too cheap/expensive, filter non-craftable, tech restriction)
+-- preprocess recipes (remove too cheap/expensive, filter non-craftable)
 -- maximum requirement
 -- auto setting sync
 -- force override setting? in desync message
@@ -17,14 +17,17 @@ require("classes.RecipeRequirement")
 total_raw.use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
 
 item_names = {} -- array of item names
-recipe_of_item = {} -- table of (item name) -> (recipe)
+recipes_of_item = {} -- table of (item name) -> (recipes)
 cost_of_recipe = {}  -- table of (recipe name) -> (recipe raw cost)
-resources = {} -- 'iron ore', 'coal', ...
 
+resources = {} -- 'iron ore', 'coal', ...
+science_packs = {} -- 'science-pack-1', ...
+
+resources_whitelist = {"raw-wood"}
 resources_blacklist = {}
 
 function init_tables(recipes)
-  -- recipe_of_item
+  -- recipes_of_item
   local contained_items = {}
   for recipename, recipe in pairs(recipes) do
     for product, _ in pairs(getProducts(recipe)) do
@@ -32,52 +35,173 @@ function init_tables(recipes)
         contained_items[product] = true
         table.insert(item_names, product)
       end
-      if not recipe_of_item[product] then
-        recipe_of_item[product] = {}
+      if not recipes_of_item[product] then
+        recipes_of_item[product] = {}
       end
-      table.insert(recipe_of_item[product], recipe)
+      table.insert(recipes_of_item[product], recipe)
     end
   end
+
   -- cost_of_recipe
   for recipename, recipe in pairs(recipes) do
     local exclude = {}
     for product,amount in pairs(getProducts(recipe)) do
       exclude[product] = true
     end
-    local ingredients = getRawIngredients(recipe, exclude, recipe_of_item)
+    local ingredients = getRawIngredients(recipe, exclude, recipes_of_item)
     if (ingredients.ERROR_INFINITE_LOOP) then
       ingredients = getIngredients(recipe)
     end
     cost_of_recipe[recipename] = ingredients
   end
 
-  --resources
-  local contained_resources = {}
-  for _, resource in ipairs(resources_blacklist) do
-    contained_resources[resource] = true
+  -- resources
+  local resources_set = {}
+  local blacklist_set = {}
+  for _, blacklist in pairs(resources_blacklist) do
+    blacklist_set[blacklist] = true
   end
-  for _, costs in pairs(cost_of_recipe) do
-    if costs then
-      for resource, _ in pairs(costs) do
-        if not contained_resources[resource] then
-          contained_resources[resource] = true
-          table.insert(resources, resource)
+  for _, whitelist in pairs(resources_whitelist) do
+    table.insert(resources, whitelist)
+    resources_set[whitelist] = true
+  end
+  for _, resource_metadata in pairs(data.raw.resource) do
+    local resource = resource_metadata.name
+    if not blacklist_set[resource] and not resources_set[resource] then
+      table.insert(resources, resource)
+    end
+  end
+
+  -- science_packs
+  -- Dynamic version
+  --[[
+  science_packs = {}
+  for _, item in pairs(data.raw.tool) do
+    if item.subgroup and item.subgroup == "science-pack" then
+      table.insert(science_packs, item.name)
+    end
+  end
+  table.sort(science_packs) -- Required to make recipe deterministic
+  --]]
+  -- Static version
+  science_packs = {
+    "science-pack-1", 
+    "science-pack-2", 
+    "science-pack-3", 
+    "military-science-pack",
+    "production-science-pack",
+    "high-tech-science-pack"
+  }
+  table.sort(science_packs) -- Required to make recipe deterministic
+end
+
+
+function insert_all_items(tbl, recipe)
+  if recipe.result then
+    table.insert(tbl, recipe.result)
+  end
+  if recipe.results then
+    for _, product in pairs(recipe.results) do
+      table.insert(tbl, product.name)
+    end
+  end
+end
+
+
+-- Returns 'science_pack': 'item candidates'
+function generate_filtered_recipes(pack_to_candidates)
+  -- TODO: filter recipes
+  local filtered_recipes = data.raw.recipe
+
+  local filtered_items = {}
+  for _, recipe in pairs(filtered_recipes) do
+    insert_all_items(filtered_items, recipe)
+  end
+  filtered_items = table.unique(filtered_items)
+
+  -- Filter science packs
+  for _, pack in pairs(science_packs) do
+    for i, item in pairs(filtered_items) do
+      if item == pack then
+        table.remove(filtered_items, i)
+      end
+    end
+  end
+
+  -- TODO: find a way to generate this dynamically
+  local science_pack_depends = {
+    ["science-pack-1"] = {},
+    ["science-pack-2"] = {"science-pack-1"},
+    ["science-pack-3"] = {"science-pack-1", "science-pack-2"},
+    ["military-science-pack"] = {"science-pack-1", "science-pack-2"},
+    ["production-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3"},
+    ["high-tech-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3"},
+  }
+
+  -- Stores science packs to exclude from candidates
+  local recipe_requires = {}
+  for _, tech in pairs(data.raw.technology) do
+    local packs_set = {}
+    -- Note: these variables are different from what factorio API doc says
+    for _, ing in pairs(tech.unit.ingredients) do
+      local pack = ing[1]
+      packs_set[pack] = true
+      if science_pack_depends[pack] then
+        for _, dependant in pairs(science_pack_depends[pack]) do
+          packs_set[dependant] = true
+        end
+      end
+    end
+    if tech.effects then
+      for _, modifier in pairs(tech.effects) do
+        if modifier.type == "unlock-recipe" then
+          -- What if same recipe is unlocked in different techs? Possible bad luck.
+          recipe_requires[modifier.recipe] = packs_set
         end
       end
     end
   end
-  --flog(resources)
-  --flog(cost_of_recipe)
+
+  local item_requires = {}
+  for _, item_name in pairs(item_names) do
+    -- TODO: better minimal pack algorithm
+    local min_requires = recipe_requires[(recipes_of_item[item_name][1]).name]
+    if min_requires then
+      for _, recipe in pairs(recipes_of_item[item_name]) do
+        local requires = recipe_requires[recipe.name]
+        if #requires < #min_requires then
+          min_requires = requires
+        end
+      end
+    end
+    item_requires[item_name] = min_requires
+  end
+    
+  -- TODO: improvement in recipe -> item?
+  for _, pack in pairs(science_packs) do
+    pack_to_candidates[pack] = {}
+  end
+  for _, item_name in pairs(filtered_items) do
+    for _, pack in pairs(science_packs) do
+      
+      if not item_requires[item_name] then -- It is unlocked from start
+        table.insert(pack_to_candidates[pack], item_name)
+      elseif not item_requires[item_name][pack] then -- Tech tree validated
+        table.insert(pack_to_candidates[pack], item_name)
+      end
+    end
+  end
+  pack_to_candidates = table.unique(pack_to_candidates)
 end
 
 
 -- TODO: fix >1 fluid
 -- fix science pack picking
-function getRandomItems(num)
+function get_random_items(num, candidates)
   local items = {}
   for i = 1,num,1 do
     while true do
-      local item = item_names[math.random(#item_names)]
+      local item = candidates[math.random(#candidates)]
       local fail = false
       for j = 1,i-1,1 do
         if items[j] == item then
@@ -95,17 +219,18 @@ function getRandomItems(num)
 end
 
 
-function set_ingredients(requirement, selected_resources, science_pack_recipe)	
+-- 'science_pack_recipe' should refer to data.raw
+function set_ingredients(requirement, selected_resources, science_pack_recipe, candidates)	
   local final_ingredients = {}
   local has_fluid = false
   while true do
-    local ingredients = getRandomItems(3)
+    local ingredients = get_random_items(3, candidates)
     flog("loop start")
     flog(table.tostring(ingredients))
     local costs = {}
     -- TODO: consider multiple amount recipe
     for i, ingredient in ipairs(ingredients) do
-      local recipename = recipe_of_item[ingredient][1].name -- TODO: fix
+      local recipename = recipes_of_item[ingredient][1].name -- TODO: fix
       costs[i] = IngredientCost:new(selected_resources, cost_of_recipe[recipename])
     end
     
@@ -140,41 +265,28 @@ end
 
 function main()
   math.randomseed(settings.startup["serendipity-randomseed"].value)
-
-  -- TODO: fix
-  selected_resources = {
-    "copper-ore",
-    "iron-ore",
-    "stone",
-    "raw-wood",
-    "crude-oil",
-    "coal",
-    "uranium-ore"
-  }
-
-  science_packs = {}
-  for _, item in pairs(data.raw.tool) do
-    if item.subgroup and item.subgroup == "science-pack" then
-      table.insert(science_packs, item.name)
-    end
-  end
-  -- TODO: make science_packs ordered to be deterministic
   
+  init_tables(data.raw.recipe)
+
+  local pack_to_candidates = {}
+  generate_filtered_recipes(pack_to_candidates)
+
   for _, science_pack_name in ipairs(science_packs) do
     flog("Find ingredients: "..science_pack_name)
     local requirement = RecipeRequirement.new()
-    if recipe_of_item[science_pack_name] then
-      local pack_recipename = recipe_of_item[science_pack_name][1].name -- TODO: fix
-      local pack_cost = IngredientCost:new(selected_resources, cost_of_recipe[pack_recipename])
+    if recipes_of_item[science_pack_name] then
+      local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
+      local pack_cost = IngredientCost:new(resources, cost_of_recipe[pack_recipename])
       requirement.min_req = pack_cost
 
-      set_ingredients(requirement, selected_resources, data.raw.recipe[pack_recipename])
+      local candidates = pack_to_candidates[science_pack_name]
+      set_ingredients(requirement, resources, data.raw.recipe[pack_recipename], candidates)
     end
   end
 end
 
 
-init_tables(data.raw.recipe)
+
 main()
 --bobmods.lib.recipe.replace_ingredient ("science-pack-1", "copper-plate", "electronic-circuit")
 --bobmods.lib.recipe.replace_ingredient ("science-pack-1", "electronic-circuit", getRandomItem())

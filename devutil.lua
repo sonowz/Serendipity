@@ -34,11 +34,27 @@ end
 return "{" .. table.concat( result, "," ) .. "}"
 end
 
-local logFormat = {comment = false, numformat = '%1.8g' }
-function flog(obj)
-  log( serpent.block( obj, logFormat ) )
+function table.contains(tbl, x)
+  for _, value in pairs(table) do
+    if value == x then
+      return true
+    end
+  end
+  return false
 end
 
+function table.unique(tbl)
+  local hash = {}
+  local res = {}
+
+  for _,v in ipairs(tbl) do
+    if (not hash[v]) then
+      res[#res+1] = v
+      hash[v] = true
+    end
+  end
+  return res
+end
 
 --http://snippets.luacode.org/snippets/Deep_Comparison_of_Two_Values_3
 function table.deepcompare(t1,t2,ignore_mt)
@@ -59,4 +75,9 @@ function table.deepcompare(t1,t2,ignore_mt)
   if v1 == nil or not table.deepcompare(v1,v2) then return false end
   end
   return true
+end
+
+local logFormat = {comment = false, numformat = '%1.8g' }
+function flog(obj)
+  log( serpent.block( obj, logFormat ) )
 end

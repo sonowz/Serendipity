@@ -9,3 +9,6 @@ Make science pack recipes random
   - Remove too cheap/expensive items (for performance)
 - Maximum requirement
 - Use `data.raw['resource']` to get `materials`
+
+## Possible Features
+- Generate alternative science pack recipe (which is harder, but low cost)

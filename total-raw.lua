@@ -70,7 +70,7 @@ function getRecipes(item)
 end
 --]]
 
-function getRawIngredients(recipe, exclude, recipe_of_item)
+function getRawIngredients(recipe, exclude, recipes_of_item)
    local raw_ingredients = {}
    for name,amount in pairs(getIngredients(recipe)) do
       -- Do not use an item as its own ingredient 
@@ -86,9 +86,9 @@ function getRawIngredients(recipe, exclude, recipe_of_item)
       -- There might be more than one recipe to choose from
       local subrecipes = {}
       local loop_error = nil
-      if recipe_of_item[name] then
-        for i,subrecipe in pairs(recipe_of_item[name]) do
-          local subingredients = getRawIngredients(subrecipe, excluded_ingredients, recipe_of_item)
+      if recipes_of_item[name] then
+        for i,subrecipe in pairs(recipes_of_item[name]) do
+          local subingredients = getRawIngredients(subrecipe, excluded_ingredients, recipes_of_item)
           if (subingredients.ERROR_INFINITE_LOOP) then
               loop_error = subingredients.ERROR_INFINITE_LOOP
           else
