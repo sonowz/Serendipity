@@ -21,7 +21,7 @@ function RecipeRequirement:new()
 end
 
 
--- check if one ingredient satisfies individual requirement
+-- Check if one ingredient satisfies individual requirement
 function RecipeRequirement:partial_fit(ing_cost)
   -- currently only check depth
   -- depth does not change even considering multiple count (ex: 2x iron plate)
@@ -31,82 +31,96 @@ end
 
 RecipeRequirement._find_min_count = {}
 
--- check if linear combination of ingredients satisfy requirement
+-- Check if linear combination of ingredients satisfy requirement
 function RecipeRequirement:total_fit(ing_costs)
   return self:_find_min_count(ing_costs)
 end
 
 
--- TODO: edge cases (singular, right inverse, ...)
--- find minimum count for ingredients
--- same as solving linear system 'r <= ax + by + cz + ... <= nr' for integer 1<= a,b,c <= n
---                               where 'r' is 'min_req', x,y,z is 'ing_costs'
--- use solution of linear system '(x y z)^-1 * r <= (a b c)^t' (least squares)
--- rhs can't be determined same way, since (x y z) can be indefinite matrix
+-- Check if min_req_mat <= cost_mat <= max_req_mat
+function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat)
+  local min_req = min_req_mat[1]
+  local max_req = max_req_mat[1]
+  local cost = cost_mat[1]
+  local dimension = #cost
+  for i = 1, dimension do
+    if not (min_req[i] <= cost[i] and cost[i] <= max_req[i]) then
+      return nil -- Fail
+    end
+  end
+
+  -- If fit, return 'pack_count' which makes normalized least square
+  for i = 1, dimension do
+    if min_req[i] ~= 0.0 then
+      cost[i] = cost[i] / min_req[i]
+    else -- TODO: adjust cost which does not appear in original pack
+      cost[i] = -100
+    end
+  end
+  local least_squares = {}
+  for i = 1, self.max_ingredient_count do
+    local least_square = 0.0
+    for j = 1, dimension do
+      if cost[j] >= 0.0 then
+        least_square = least_square + (i - cost[j]) * (i - cost[j])
+      end
+    end
+    table.insert(least_squares, least_square)
+  end
+  local index, min_ls = 1, least_squares[1]
+  for i, least_square in pairs(least_squares) do
+    if least_square < min_ls then
+      index = i
+      min_ls = least_square
+    end
+  end
+  return index -- Best science pack count
+end
+
+
+-- Find minimum count for ingredients
+-- Same as solving linear system 'r <= ax + by + cz + ... <= nr' for integer 1 <= a,b,c <= n
+--                               where 'r' is 'min_req', x,y,z is 'ing_costs',
+--                                     'n' is 'self.max_ingredient_count'
 function RecipeRequirement:_find_min_count(ing_costs)
-  
-  -- make min_req('r') vector
+  -- Make min_req('r'), max_req('nr') vector
   local ing_keys = ing_costs[1]:keys(true) -- no_depth, depth was considered in partial_fit()
   local min_req = self.min_req:toarray(ing_keys)
-  min_req = matrix.transpose(matrix:new({min_req}))
-  
-  -- construct matrix (x y z)
-  local mat = {}
-  for i, ing_cost in ipairs(ing_costs) do
-    mat[i] = ing_cost:toarray(ing_keys)
+  min_req = matrix:new({min_req})
+  local max_req = matrix.mulnum(min_req, self.max_ingredient_count)
+
+  -- Make ing_cost vectors
+  local ing_mats = {}
+  for _, ing_cost in pairs(ing_costs) do
+    table.insert(ing_mats, matrix:new({ing_cost:toarray(ing_keys)}))
   end
-  mat = matrix.transpose(matrix:new(mat))
-  
-  -- delete zero row (avoid singular case)
-  local is_zero_vector = function (v)
-    for _, x in ipairs(v) do if x ~= 0 then return false end end
-    return true
+
+  -- fitting_cost: ax + by + cz + ...
+  local ing_counts = {}; -- {1, 1, 1, ..}
+  local fitting_cost = {}; -- {0.0, 0.0, 0.0, ..} vector
+  for _ = 1, #ing_costs do table.insert(ing_counts, 1) end
+  for _ = 1, #ing_keys do table.insert(fitting_cost, 0.0) end
+  fitting_cost = matrix:new({fitting_cost})
+  for _, ing_mat in pairs(ing_mats) do
+    fitting_cost = matrix.add(fitting_cost, ing_mat)
   end
-  local n = 1
-  local temp_mat = {}
-  local temp_keys = {}
-  local temp_r = {}
-  for i, row in ipairs(mat) do
-    if not is_zero_vector(row) then
-      temp_mat[n] = row
-      temp_keys[n] = ing_keys[i]
-      temp_r[n] = min_req[i]
-      n = n + 1
-    elseif min_req[i][1] ~= 0.0 then -- requirement can't be satisfied
-      return nil
+  
+  -- Here, brute-force all possible cases
+  -- Time complexity: n ^ #ing_costs (at most 5^5)
+  local i = 1 -- cursor
+  local n = self.max_ingredient_count
+  while true do
+    local fit_result = self:_check_fit(min_req, max_req, fitting_cost)
+    if fit_result then -- Success!
+      return {ing_counts = ing_counts, pack_count = fit_result}
+    end
+    fitting_cost = matrix.add(fitting_cost, ing_mats[i])
+    ing_counts[i] = ing_counts[i] + 1
+    if ing_counts[i] > n then
+      ing_counts[i] = 1
+      i = i + 1
+      if i > #ing_costs then return nil end -- Fail!
+      fitting_cost = matrix.sub(fitting_cost, matrix.mulnum(ing_mats[i], n-1))
     end
   end
-  mat = matrix:new(temp_mat)
-  ing_keys = temp_keys
-  min_req = matrix:new(temp_r)
-
-  -- find left inverse
-  local transpose = matrix.transpose(mat)
-  local inverted = matrix.invert(transpose * mat)
-  if not inverted then return nil end -- TODO: singular case
-  local left_inverse = inverted * transpose
-
-  -- (x y z)^-1 * r
-  local m_r = left_inverse * min_req
-  local epsilon = matrix:new(matrix.rows(m_r), matrix.columns(m_r), 1E-6) -- consider error from inverse
-
-  -- TODO: prove '(x y z)^-1 * r <= (a b c)^t' holds when (x y z) is indefinite (maybe because a,b,c >= 1)
-  -- find minimum a,b,c <= n
-  local solution = {}
-  for i, row in ipairs(m_r - epsilon) do
-    solution[i] = math.max(math.ceil(row[1]), 1)
-    -- disable to debug easily
-    --if solution[i] > self.max_ingredient_count then return nil end -- TODO: make recursive call
-  end
-  
-  -- check if solution satisfies ax + by + cz + ... <= nr
-  local lhs = mat * matrix.transpose(matrix:new({solution}))
-  local rhs = self.max_ingredient_count * min_req
-  for _, row in ipairs(rhs - lhs) do
-    for _, x in ipairs(row) do
-      if x < 0.0 then return nil end
-    end
-  end
-
-  return solution
 end

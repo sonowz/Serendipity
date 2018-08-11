@@ -5,7 +5,9 @@ require("classes.RecipeRequirement")
 
 -- main TODOs
 -- preprocess recipes (remove too cheap/expensive)
--- maximum requirement
+-- fix randomseed not working
+-- time & depth calculation
+-- maximum requirement adjustment
 -- auto setting sync
 -- force override setting? in desync message
 
@@ -209,6 +211,7 @@ function get_random_items(num, candidates)
   local items = {}
   for i = 1,num,1 do
     while true do
+      --local rand_index = math.ceil(global.generator() * #candidates)
       local item = candidates[math.random(#candidates)]
       local fail = false
       for j = 1,i-1,1 do
@@ -229,6 +232,7 @@ end
 
 -- 'science_pack_recipe' should refer to data.raw
 function set_ingredients(requirement, selected_resources, science_pack_recipe, candidates)	
+  local pack_count = 1
   local final_ingredients = {}
   local has_fluid = false
   while true do
@@ -237,31 +241,40 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
     flog(table.tostring(ingredients))
     local costs = {}
     -- TODO: consider multiple amount recipe
+    local partial_fit_success = true
     for i, ingredient in ipairs(ingredients) do
       local recipename = recipes_of_item[ingredient][1].name -- TODO: fix
       costs[i] = IngredientCost:new(selected_resources, cost_of_recipe[recipename])
+      if not requirement:partial_fit(costs[i]) then
+        partial_fit_success = false
+        break
+      end
     end
     
-    local amounts = requirement:total_fit(costs)
-    local str = ""
-    if amounts then str = table.tostring(amounts) else str = "nil" end
-    flog(amounts)
-    if amounts then
-      for i, ingredient in ipairs(ingredients) do
-        local item_type = "item"
-        if data.raw.fluid[ingredient] then
-          item_type = "fluid"
-          has_fluid = true
+    if partial_fit_success then
+      local fit_result = requirement:total_fit(costs)
+      if fit_result then
+        flog(fit_result)
+        pack_count = fit_result.pack_count
+        local amounts = fit_result.ing_counts
+        for i, ingredient in ipairs(ingredients) do
+          local item_type = "item"
+          if data.raw.fluid[ingredient] then
+            item_type = "fluid"
+            has_fluid = true
+          end
+          table.insert(final_ingredients, {
+            name=ingredient,
+            type=item_type,
+            amount=amounts[i]
+          })
         end
-        table.insert(final_ingredients, {
-          name=ingredient,
-          type=item_type,
-          amount=amounts[i]
-        })
+        break
       end
-      break
     end
   end
+  science_pack_recipe.result_count = pack_count
+  science_pack_recipe.energy_required = science_pack_recipe.energy_required * pack_count
   science_pack_recipe.ingredients = final_ingredients
   if has_fluid then
     science_pack_recipe.category = "crafting-with-fluid"
@@ -273,7 +286,7 @@ end
 
 function main()
   math.randomseed(settings.startup["serendipity-randomseed"].value)
-  
+
   init_tables(data.raw.recipe)
 
   local pack_to_candidates = {}
