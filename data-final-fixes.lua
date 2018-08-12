@@ -5,8 +5,7 @@ require("classes.RecipeRequirement")
 
 -- main TODOs
 -- preprocess recipes (remove too cheap/expensive)
--- auto setting sync
--- force override setting? in desync message
+-- auto sync mod setting mismatch (currently seems impossible)
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)

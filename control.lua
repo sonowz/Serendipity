@@ -3,19 +3,25 @@ require("gui")
 require("devutil")
 
 script.on_init(function()
-  global.randomseed = settings.startup["serendipity-randomseed"].value
+  global.serendipity_configs = {
+    randomseed = tostring(settings.startup["serendipity-randomseed"].value),
+    ["expensive-recipe"] = tostring(settings.startup["serendipity-expensive-recipe"].value),
+    difficulty = tostring(settings.startup["serendipity-difficulty"].value)
+  }
 
   local recipes = game.forces.player.recipes
   global.temp_ingredients = recipes["science-pack-1"].ingredients
 end)
 
 script.on_configuration_changed(function()
-  local seed_changed = false
   local recipe_changed = true
 
-  if global.randomseed ~= settings.startup["serendipity-randomseed"].value then
-    seed_changed = true
-    flog("Different seed detected")
+  local changed_settings = {}
+  for name, value in pairs(global.serendipity_configs) do
+    if tostring(settings.startup["serendipity-"..name].value) ~= value then
+      changed_settings[name] = value
+    end
+    flog("Different setting detected")
   end
   local recipes = game.forces.player.recipes
   if not table.deepcompare(global.temp_ingredients, recipes["science-pack-1"].ingredients) then
@@ -23,11 +29,12 @@ script.on_configuration_changed(function()
     flog("Different recipe detected")
   end
 
-  if seed_changed then
+  if changed_settings ~= {} then
     for _, player in pairs(game.forces.player.players) do
-      gui_different_seed_error(player.gui, global.randomseed)
+      gui_different_setting_error(player.gui, changed_settings)
     end
   end
 
-  -- TODO: Add recipe setting
+  -- TODO: Add different recipe error
+  -- Continue anyway | Quit
 end)
