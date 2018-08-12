@@ -7,16 +7,19 @@ require("classes.RecipeRequirement")
 -- preprocess recipes (remove too cheap/expensive)
 -- fix randomseed not working
 -- time & depth calculation
--- maximum requirement adjustment
 -- auto setting sync
 -- force override setting? in desync message
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)
 -- use resources unincluded in pack recipe (might error)
--- difficulty (0.5x, 1x, 2x, ...)
 
 total_raw.use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
+
+-- Use 'configs' rather than native 'settings'
+configs = {
+  difficulty = 1
+}
 
 item_names = {} -- array of item names
 recipes_of_item = {} -- table of (item name) -> (recipes)
@@ -96,6 +99,16 @@ function init_tables(recipes)
     "high-tech-science-pack"
   }
   table.sort(science_packs) -- Required to make recipe deterministic
+end
+
+function init_configs()
+  difficulty_table = {
+    ["0.5x"] = 0,
+    ["1x"] = 1,
+    ["2x"] = 2,
+    ["4x"] = 3
+  }
+  configs.difficulty = difficulty_table[settings.startup["serendipity-difficulty"].value]
 end
 
 
@@ -294,6 +307,8 @@ end
 function main()
   math.randomseed(settings.startup["serendipity-randomseed"].value)
 
+  init_configs()
+
   init_tables(data.raw.recipe)
 
   local pack_to_candidates = {}
@@ -301,10 +316,14 @@ function main()
 
   for _, science_pack_name in ipairs(science_packs) do
     flog("Find ingredients: "..science_pack_name)
-    local requirement = RecipeRequirement.new()
     if recipes_of_item[science_pack_name] then
+      local requirement = RecipeRequirement.new()
+      requirement.configs = configs
+
       local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
       local pack_cost = IngredientCost:new(resources, cost_of_recipe[pack_recipename])
+      local cost_muiltiplier = math.pow(2, configs.difficulty - 1) -- Same as settings value
+      pack_cost = pack_cost:mul(cost_muiltiplier)
       requirement.min_req = pack_cost
 
       local candidates = pack_to_candidates[science_pack_name]

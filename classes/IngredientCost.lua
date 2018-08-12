@@ -48,10 +48,10 @@ end
 
 
 -- scala multiplication (except depth)
-function IngredientCost:mul(k)
+function IngredientCost:mul(num)
   for k, v in pairs(self) do
     if k ~= "depth" then
-      self[k] = k * v
+      self[k] = num * v
     end
   end
   return self

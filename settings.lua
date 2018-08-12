@@ -10,5 +10,12 @@ data:extend({
     name = "serendipity-expensive-recipe",
     setting_type = "startup",
     default_value = false
+  },
+  {
+    type = "string-setting",
+    name = "serendipity-difficulty",
+    setting_type = "startup",
+    allowed_values = {"0.5x", "1x", "2x", "4x"},
+    default_value = "1x"
   }
 })

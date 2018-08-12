@@ -17,6 +17,7 @@ function RecipeRequirement:new()
                              -- depth = average depth among ingredients
   obj.tech_req = {} -- list of science packs (TODO: blacklist or whitelist?)
   obj.max_ingredient_count = 5 -- max possible count of ingredient (ex: 5x iron plate) 
+  obj.configs = {}  -- config object in 'data-final-fixes.lua'
   return setmetatable(obj, RecipeRequirement)
 end
 
@@ -25,7 +26,9 @@ end
 function RecipeRequirement:partial_fit(ing_cost)
   -- currently only check depth
   -- depth does not change even considering multiple count (ex: 2x iron plate)
-  return self.min_req.depth <= ing_cost.depth
+  local global_min_depth = self.configs.difficulty + 1
+  local recipe_max_depth = self.min_req.depth
+  return math.min(global_min_depth, recipe_max_depth) <= ing_cost.depth
 end
 
 
