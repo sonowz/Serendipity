@@ -48,7 +48,6 @@ function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat)
       return nil -- Fail
     end
   end
-
   -- If fit, return 'pack_count' which makes normalized least square
   for i = 1, dimension do
     if min_req[i] ~= 0.0 then
@@ -104,9 +103,8 @@ function RecipeRequirement:_find_min_count(ing_costs)
   for _, ing_mat in pairs(ing_mats) do
     fitting_cost = matrix.add(fitting_cost, ing_mat)
   end
-  
   -- Here, brute-force all possible cases
-  -- Time complexity: n ^ #ing_costs (at most 5^5)
+  -- Number of cases: n ^ #ing_costs (at most 5^5)
   local i = 1 -- cursor
   local n = self.max_ingredient_count
   while true do
@@ -114,13 +112,20 @@ function RecipeRequirement:_find_min_count(ing_costs)
     if fit_result then -- Success!
       return {ing_counts = ing_counts, pack_count = fit_result}
     end
-    fitting_cost = matrix.add(fitting_cost, ing_mats[i])
     ing_counts[i] = ing_counts[i] + 1
+    fitting_cost = matrix.add(fitting_cost, ing_mats[i])
     if ing_counts[i] > n then
-      ing_counts[i] = 1
-      i = i + 1
-      if i > #ing_costs then return nil end -- Fail!
-      fitting_cost = matrix.sub(fitting_cost, matrix.mulnum(ing_mats[i], n-1))
+      while ing_counts[i] > n do
+        -- Rollback
+        ing_counts[i] = 1
+        fitting_cost = matrix.sub(fitting_cost, matrix.mulnum(ing_mats[i], n))
+        -- Carry
+        i = i + 1
+        if i > #ing_costs then return nil end -- Fail!
+        ing_counts[i] = ing_counts[i] + 1
+        fitting_cost = matrix.add(fitting_cost, ing_mats[i])
+      end
+      i = 1
     end
   end
 end

@@ -86,6 +86,7 @@ function init_tables(recipes)
   table.sort(science_packs) -- Required to make recipe deterministic
   --]]
   -- Static version
+  -- See: todo in 'science_pack_depends'
   science_packs = {
     "science-pack-1", 
     "science-pack-2", 
@@ -130,14 +131,18 @@ function generate_filtered_recipes(pack_to_candidates)
     end
   end
 
-  -- TODO: find a way to generate this dynamically
+  -- Write down all packs that are prerequisites
+  -- ex) Production and high-tech mutually require each other, since they are mutually independant
+  -- This can't be generated dynamically,
+  -- since it requires implicated dependency by human
+  -- TODO: find a way to embrace new science pack mod
   local science_pack_depends = {
     ["science-pack-1"] = {},
     ["science-pack-2"] = {"science-pack-1"},
     ["science-pack-3"] = {"science-pack-1", "science-pack-2"},
     ["military-science-pack"] = {"science-pack-1", "science-pack-2"},
-    ["production-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3"},
-    ["high-tech-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3"},
+    ["production-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3", "military-science-pack", "high-tech-science-pack"},
+    ["high-tech-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3", "military-science-pack", "production-science-pack"},
   }
 
   -- Stores science packs to exclude from candidates
@@ -235,9 +240,9 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
   local pack_count = 1
   local final_ingredients = {}
   local has_fluid = false
+  local ingredients_count = #science_pack_recipe.ingredients
   while true do
-    local ingredients = get_random_items(3, candidates)
-    flog("loop start")
+    local ingredients = get_random_items(ingredients_count, candidates)
     flog(table.tostring(ingredients))
     local costs = {}
     -- TODO: consider multiple amount recipe
@@ -254,6 +259,8 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
     if partial_fit_success then
       local fit_result = requirement:total_fit(costs)
       if fit_result then
+        flog(costs)
+        flog(requirement.min_req)
         flog(fit_result)
         pack_count = fit_result.pack_count
         local amounts = fit_result.ing_counts
@@ -273,8 +280,8 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
       end
     end
   end
+  science_pack_recipe.energy_required = science_pack_recipe.energy_required * pack_count / (science_pack_recipe.result_count or 1)
   science_pack_recipe.result_count = pack_count
-  science_pack_recipe.energy_required = science_pack_recipe.energy_required * pack_count
   science_pack_recipe.ingredients = final_ingredients
   if has_fluid then
     science_pack_recipe.category = "crafting-with-fluid"
