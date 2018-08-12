@@ -53,11 +53,16 @@ function init_tables(recipes)
     for product,amount in pairs(getProducts(recipe)) do
       exclude[product] = true
     end
-    local ingredients = getRawIngredients(recipe, exclude, recipes_of_item)
-    if (ingredients.ERROR_INFINITE_LOOP) then
-      ingredients = getIngredients(recipe)
+    local result = getRawIngredients(recipe, exclude, recipes_of_item)
+    if (result.ERROR_INFINITE_LOOP) then
+      result = {
+        ingredients = getIngredients(recipe),
+        depth = 1
+      }
     end
-    cost_of_recipe[recipename] = ingredients
+    -- Add depth to cost
+    result.ingredients["depth"] = result.depth
+    cost_of_recipe[recipename] = result.ingredients
   end
 
   -- resources
@@ -259,17 +264,16 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
     flog(table.tostring(ingredients))
     local costs = {}
     -- TODO: consider multiple amount recipe
-    local partial_fit_success = true
+    local partial_fit_fail = 0
     for i, ingredient in ipairs(ingredients) do
       local recipename = recipes_of_item[ingredient][1].name -- TODO: fix
       costs[i] = IngredientCost:new(selected_resources, cost_of_recipe[recipename])
       if not requirement:partial_fit(costs[i]) then
-        partial_fit_success = false
-        break
+        partial_fit_fail = partial_fit_fail + 1
       end
     end
     
-    if partial_fit_success then
+    if partial_fit_fail <= 1 then
       local fit_result = requirement:total_fit(costs)
       if fit_result then
         flog(costs)
@@ -286,7 +290,7 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
           table.insert(final_ingredients, {
             name=ingredient,
             type=item_type,
-            amount=amounts[i]
+            amount=amounts[i] or 1
           })
         end
         break

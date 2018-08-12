@@ -24,11 +24,14 @@ end
 
 -- Check if one ingredient satisfies individual requirement
 function RecipeRequirement:partial_fit(ing_cost)
-  -- currently only check depth
-  -- depth does not change even considering multiple count (ex: 2x iron plate)
-  local global_min_depth = self.configs.difficulty + 1
-  local recipe_max_depth = self.min_req.depth
-  return math.min(global_min_depth, recipe_max_depth) <= ing_cost.depth
+  -- Currently only check depth
+  -- Depth does not change even considering multiple count (ex: 2x iron plate)
+  local min_depth = math.ceil(self.min_req.depth / 2)
+  local difficulty_modifier = self.configs.difficulty
+  if self.min_req.depth <= 4 then -- Low depth adjustment
+    difficulty_modifier = math.max(difficulty_modifier - 1, 0)
+  end
+  return math.min(min_depth + difficulty_modifier, 6) <= ing_cost.depth
 end
 
 
@@ -36,7 +39,21 @@ RecipeRequirement._find_min_count = {}
 
 -- Check if linear combination of ingredients satisfy requirement
 function RecipeRequirement:total_fit(ing_costs)
+  if not self:_check_depth_constraint(ing_costs) then
+    return nil
+  end
   return self:_find_min_count(ing_costs)
+end
+
+
+-- Maximum depth of ingredients should not be greater than original maximum depth
+-- (Difficulty setting leverages this constraint)
+function RecipeRequirement:_check_depth_constraint(ing_costs)
+  local ing_max_depth = ing_costs[1]["depth"]
+  for _, ing_cost in pairs(ing_costs) do
+    ing_max_depth = math.max(ing_max_depth, ing_cost["depth"])
+  end
+  return ing_max_depth <= self.min_req.depth + self.configs.difficulty
 end
 
 
@@ -51,6 +68,7 @@ function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat)
       return nil -- Fail
     end
   end
+  
   -- If fit, return 'pack_count' which makes normalized least square
   for i = 1, dimension do
     if min_req[i] ~= 0.0 then
@@ -106,6 +124,7 @@ function RecipeRequirement:_find_min_count(ing_costs)
   for _, ing_mat in pairs(ing_mats) do
     fitting_cost = matrix.add(fitting_cost, ing_mat)
   end
+
   -- Here, brute-force all possible cases
   -- Number of cases: n ^ #ing_costs (at most 5^5)
   local i = 1 -- cursor
