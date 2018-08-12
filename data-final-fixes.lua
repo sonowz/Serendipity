@@ -6,6 +6,7 @@ require("classes.RecipeRequirement")
 -- main TODOs
 -- preprocess recipes (remove too cheap/expensive)
 -- auto sync mod setting mismatch (currently seems impossible)
+-- detect infinite loops and get out
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)
@@ -43,8 +44,9 @@ function init_tables(recipes)
       table.insert(recipes_of_item[product], recipe)
     end
   end
-
+  
   -- cost_of_recipe
+  -- TODO: fix freezing when Bob's mod is on
   for recipename, recipe in pairs(recipes) do
     local exclude = {}
     for product,amount in pairs(getProducts(recipe)) do
@@ -61,7 +63,7 @@ function init_tables(recipes)
     result.ingredients["depth"] = result.depth
     cost_of_recipe[recipename] = result.ingredients
   end
-
+  
   -- resources
   local resources_set = {}
   local blacklist_set = {}
@@ -225,7 +227,6 @@ function generate_filtered_recipes(pack_to_candidates)
 end
 
 
--- TODO: fix >1 fluid
 -- fix science pack picking
 function get_random_items(num, candidates)
   local items = {}
@@ -250,17 +251,30 @@ function get_random_items(num, candidates)
 end
 
 
+function one_or_less_fluid(ingredients)
+  local fluid_count = 0
+  for _, ingredient in pairs(ingredients) do
+    if data.raw.fluid[ingredient] then
+      fluid_count = fluid_count + 1
+    end
+  end
+  return fluid_count <= 1
+end
+
+
 -- 'science_pack_recipe' should refer to data.raw
-function set_ingredients(requirement, selected_resources, science_pack_recipe, candidates)	
+function set_ingredients(requirement, selected_resources, science_pack_recipe, candidates)
   local pack_count = 1
   local final_ingredients = {}
   local has_fluid = false
   local ingredients_count = #science_pack_recipe.ingredients
   while true do
     local ingredients = get_random_items(ingredients_count, candidates)
+    while not one_or_less_fluid(ingredients) do
+      ingredients = get_random_items(ingredients_count, candidates)
+    end
     flog(table.tostring(ingredients))
     local costs = {}
-    -- TODO: consider multiple amount recipe
     local partial_fit_fail = 0
     for i, ingredient in ipairs(ingredients) do
       local recipename = recipes_of_item[ingredient][1].name -- TODO: fix
@@ -306,7 +320,7 @@ end
 
 
 function main()
-  randseed(settings.startup["serendipity-randomseed"].value)
+  randseed(settings.startup["serendipity-randomseed"].value % 2147483647)
 
   init_configs()
 
@@ -333,9 +347,4 @@ function main()
   end
 end
 
-
-
 main()
---bobmods.lib.recipe.replace_ingredient ("science-pack-1", "copper-plate", "electronic-circuit")
---bobmods.lib.recipe.replace_ingredient ("science-pack-1", "electronic-circuit", getRandomItem())
-

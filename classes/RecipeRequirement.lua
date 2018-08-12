@@ -42,7 +42,7 @@ function RecipeRequirement:total_fit(ing_costs)
   if not self:_check_depth_constraint(ing_costs) then
     return nil
   end
-  return self:_find_min_count(ing_costs)
+  return self:_try_total_fit(ing_costs)
 end
 
 
@@ -69,7 +69,7 @@ function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat)
     end
   end
   
-  -- If fit, return 'pack_count' which makes normalized least square
+  -- If fit, return 'pack_count' (or 'm') which makes normalized least square
   for i = 1, dimension do
     if min_req[i] ~= 0.0 then
       cost[i] = cost[i] / min_req[i]
@@ -98,11 +98,13 @@ function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat)
 end
 
 
--- Find minimum count for ingredients
+-- Find counts for ingredients
 -- Same as solving linear system 'r <= ax + by + cz + ... <= nr' for integer 1 <= a,b,c <= n
 --                               where 'r' is 'min_req', x,y,z is 'ing_costs',
 --                                     'n' is 'self.max_ingredient_count'
-function RecipeRequirement:_find_min_count(ing_costs)
+-- The result is 'a', 'b', 'c', ..., which are amount of ingredient in science pack recipe,
+-- and 1 <= m <= n where 'm' is amount of science pack produced (pack_count)
+function RecipeRequirement:_try_total_fit(ing_costs)
   -- Make min_req('r'), max_req('nr') vector
   local ing_keys = ing_costs[1]:keys(true) -- no_depth, depth was considered in partial_fit()
   local min_req = self.min_req:toarray(ing_keys)
