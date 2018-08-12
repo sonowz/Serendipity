@@ -5,8 +5,6 @@ require("classes.RecipeRequirement")
 
 -- main TODOs
 -- preprocess recipes (remove too cheap/expensive)
--- fix randomseed not working
--- time & depth calculation
 -- auto setting sync
 -- force override setting? in desync message
 
@@ -234,8 +232,8 @@ function get_random_items(num, candidates)
   local items = {}
   for i = 1,num,1 do
     while true do
-      --local rand_index = math.ceil(global.generator() * #candidates)
-      local item = candidates[math.random(#candidates)]
+      local rand_index = math.ceil(rand() * #candidates)
+      local item = candidates[rand_index]
       local fail = false
       for j = 1,i-1,1 do
         if items[j] == item then
@@ -309,7 +307,7 @@ end
 
 
 function main()
-  math.randomseed(settings.startup["serendipity-randomseed"].value)
+  randseed(settings.startup["serendipity-randomseed"].value)
 
   init_configs()
 
