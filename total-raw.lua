@@ -74,102 +74,122 @@ function getRecipes(item)
 end
 --]]
 
-function getRawIngredients(recipe, exclude, recipes_of_item)
+-- Used for memoization of getRawIngredients() result
+recipe_cache = {}
+
+function getRawIngredients(recipe, exclude, recipes_of_item, resource_set)
   local raw_ingredients = {}
   local max_depth = 1
   for name,amount in pairs(getIngredients(recipe)) do
-    -- Do not use an item as its own ingredient 
-    if (exclude[name]) then
-      return {ERROR_INFINITE_LOOP = name}
-    end
-    local excluded_ingredients = {[name] = true}
-    for k,v in pairs(exclude) do
-      excluded_ingredients[k] = true
-    end
-
-    -- Recursively find the sub-ingredients for each ingredient
-    -- There might be more than one recipe to choose from
-    local subrecipes = {}
-    local loop_error = nil
-    if recipes_of_item[name] then
-      for i,subrecipe in pairs(recipes_of_item[name]) do
-        local result = getRawIngredients(subrecipe, excluded_ingredients, recipes_of_item)
-        if (result.ERROR_INFINITE_LOOP) then
-          loop_error = result.ERROR_INFINITE_LOOP
-        else
-          local subingredients = result.ingredients
-          local depth = result.depth
-          local value = 0
-          for subproduct,subamount in pairs(getProducts(subrecipe)) do
-            value = value + subamount
-          end
-
-          local divisor = 0
-          for subingredient,subamount in pairs(subingredients) do
-            divisor = divisor + subamount
-          end
-
-          if (divisor == 0) then divisor = 1 end
-
-          table.insert(subrecipes, {recipe = subrecipe, ingredients = subingredients, value = value / divisor, depth = depth})
-        end
-      end
-    end
-
-    if (#subrecipes == 0) then
-      if (loop_error and loop_error ~= name) then
-        -- This branch of the recipe tree is invalid
-        return {ERROR_INFINITE_LOOP = loop_error}
-      else
-        -- This is a raw resource
-        if (raw_ingredients[name]) then
-          raw_ingredients[name] = raw_ingredients[name] + amount
-        else 
-          raw_ingredients[name] = amount
-        end
+    -- Check if the ingredient is resource
+    if resource_set[name] then
+      if (raw_ingredients[name]) then
+        raw_ingredients[name] = raw_ingredients[name] + amount
+      else 
+        raw_ingredients[name] = amount
       end
     else
-      -- Pick the cheapest recipe
-      local best_recipe = nil
-      local best_value = 0
-      for i,subrecipe in pairs(subrecipes) do
-        if (best_value < subrecipe.value) then
-          best_value = subrecipe.value
-          best_recipe = subrecipe
+      -- Do not use an item as its own ingredient 
+      if (exclude[name]) then
+        return {ERROR_INFINITE_LOOP = name}
+      end
+      local excluded_ingredients = {[name] = true}
+      for k,v in pairs(exclude) do
+        excluded_ingredients[k] = true
+      end
+
+      -- Recursively find the sub-ingredients for each ingredient
+      -- There might be more than one recipe to choose from
+      local subrecipes = {}
+      local loop_error = nil
+      if recipes_of_item[name] then
+        for i,subrecipe in pairs(recipes_of_item[name]) do
+          -- Fetch memoized rawIngredients if possible
+          local result = nil
+          if recipe_cache[subrecipe.name] then
+            result = recipe_cache[subrecipe.name]
+          else
+            result = getRawIngredients(subrecipe, excluded_ingredients, recipes_of_item, resource_set)
+          end
+          if (result.ERROR_INFINITE_LOOP) then
+            loop_error = result.ERROR_INFINITE_LOOP
+          else
+            local subingredients = result.ingredients
+            local depth = result.depth
+            local value = 0
+            for subproduct,subamount in pairs(getProducts(subrecipe)) do
+              value = value + subamount
+            end
+
+            local divisor = 0
+            for subingredient,subamount in pairs(subingredients) do
+              divisor = divisor + subamount
+            end
+
+            if (divisor == 0) then divisor = 1 end
+
+            table.insert(subrecipes, {recipe = subrecipe, ingredients = subingredients, value = value / divisor, depth = depth})
+          end
         end
       end
 
-      if best_recipe then
-        local multiple = 0
-        for subname,subamount in pairs(getProducts(best_recipe.recipe)) do
-          multiple = multiple + subamount
-        end
-
-        local best_recipe_ingredients = best_recipe.ingredients
-        if best_recipe.normal then
-          if total_raw.use_expensive_recipe and best_recipe.expensive then
-            best_recipe_ingredients = best_recipe.expensive.ingredients
-          else
-            best_recipe_ingredients = best_recipe.normal.ingredients
+      if (#subrecipes == 0) then
+        if (loop_error and loop_error ~= name) then
+          -- This branch of the recipe tree is invalid
+          return {ERROR_INFINITE_LOOP = loop_error}
+        else
+          -- This is a raw resource
+          if (raw_ingredients[name]) then
+            raw_ingredients[name] = raw_ingredients[name] + amount
+          else 
+            raw_ingredients[name] = amount
           end
         end
-        for subname,subamount in pairs(best_recipe_ingredients) do
-          if (raw_ingredients[subname]) then
-            raw_ingredients[subname] = raw_ingredients[subname] + amount * subamount / multiple
-          else
-            raw_ingredients[subname] = amount * subamount / multiple
+      else
+        -- Pick the cheapest recipe
+        local best_recipe = nil
+        local best_value = 0
+        for i,subrecipe in pairs(subrecipes) do
+          if (best_value < subrecipe.value) then
+            best_value = subrecipe.value
+            best_recipe = subrecipe
           end
         end
 
-        max_depth = math.max(max_depth, best_recipe.depth + 1)
+        if best_recipe then
+          local multiple = 0
+          for subname,subamount in pairs(getProducts(best_recipe.recipe)) do
+            multiple = multiple + subamount
+          end
+
+          local best_recipe_ingredients = best_recipe.ingredients
+          if best_recipe.normal then
+            if total_raw.use_expensive_recipe and best_recipe.expensive then
+              best_recipe_ingredients = best_recipe.expensive.ingredients
+            else
+              best_recipe_ingredients = best_recipe.normal.ingredients
+            end
+          end
+          for subname,subamount in pairs(best_recipe_ingredients) do
+            if (raw_ingredients[subname]) then
+              raw_ingredients[subname] = raw_ingredients[subname] + amount * subamount / multiple
+            else
+              raw_ingredients[subname] = amount * subamount / multiple
+            end
+          end
+
+          max_depth = math.max(max_depth, best_recipe.depth + 1)
+        end
       end
     end
   end
 
-  return {
+  local return_value = {
     ingredients = raw_ingredients,
     depth = max_depth
   }   
+  recipe_cache[recipe.name] = return_value -- Memoize
+  return return_value
 end
 
 function round(num, idp)

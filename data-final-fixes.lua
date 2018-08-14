@@ -30,6 +30,23 @@ resources_whitelist = {"raw-wood"}
 resources_blacklist = {}
 
 function init_tables(recipes)
+  -- resources
+  local resources_set = {}
+  local blacklist_set = {}
+  for _, blacklist in pairs(resources_blacklist) do
+    blacklist_set[blacklist] = true
+  end
+  for _, whitelist in pairs(resources_whitelist) do
+    table.insert(resources, whitelist)
+    resources_set[whitelist] = true
+  end
+  for _, resource_metadata in pairs(data.raw.resource) do
+    local resource = resource_metadata.name
+    if not blacklist_set[resource] and not resources_set[resource] then
+      table.insert(resources, resource)
+    end
+  end
+
   -- recipes_of_item
   local contained_items = {}
   for recipename, recipe in pairs(recipes) do
@@ -46,13 +63,16 @@ function init_tables(recipes)
   end
   
   -- cost_of_recipe
-  -- TODO: fix freezing when Bob's mod is on
+  local resource_set = {}
+  for _, resource in ipairs(resources) do
+    resource_set[resource] = true
+  end
   for recipename, recipe in pairs(recipes) do
     local exclude = {}
     for product,amount in pairs(getProducts(recipe)) do
       exclude[product] = true
     end
-    local result = getRawIngredients(recipe, exclude, recipes_of_item)
+    local result = getRawIngredients(recipe, exclude, recipes_of_item, resource_set)
     if (result.ERROR_INFINITE_LOOP) then
       result = {
         ingredients = getIngredients(recipe),
@@ -62,23 +82,6 @@ function init_tables(recipes)
     -- Add depth to cost
     result.ingredients["depth"] = result.depth
     cost_of_recipe[recipename] = result.ingredients
-  end
-  
-  -- resources
-  local resources_set = {}
-  local blacklist_set = {}
-  for _, blacklist in pairs(resources_blacklist) do
-    blacklist_set[blacklist] = true
-  end
-  for _, whitelist in pairs(resources_whitelist) do
-    table.insert(resources, whitelist)
-    resources_set[whitelist] = true
-  end
-  for _, resource_metadata in pairs(data.raw.resource) do
-    local resource = resource_metadata.name
-    if not blacklist_set[resource] and not resources_set[resource] then
-      table.insert(resources, resource)
-    end
   end
 
   -- science_packs
@@ -267,7 +270,7 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
   local pack_count = 1
   local final_ingredients = {}
   local has_fluid = false
-  local ingredients_count = #science_pack_recipe.ingredients
+  local ingredients_count = math.min(#science_pack_recipe.ingredients, 4) -- TODO: do preprocess and remove limit
   while true do
     local ingredients = get_random_items(ingredients_count, candidates)
     while not one_or_less_fluid(ingredients) do
