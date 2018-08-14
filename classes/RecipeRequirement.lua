@@ -10,12 +10,8 @@ RecipeRequirement.__index = RecipeRequirement
 function RecipeRequirement:new()
   local obj = {}
   obj.min_req = nil -- IngredientCost class
-  obj.weight = nil  -- IngredientCost class
-  obj.resource_weight = 1.0 -- don't need to change
-  obj.max_req_resource = 0.0 -- max resource cost sum (iron, copper, ...)
-  obj.max_req_total = 0.0    -- max total cost sum (resource, time, depth)
-                             -- depth = average depth among ingredients
-  obj.tech_req = {} -- list of science packs (TODO: blacklist or whitelist?)
+  obj.resource_weights = nil -- list of resources and weights used in _check_fit()
+                             -- this should include "time", but not "depth"
   obj.max_ingredient_count = 5 -- max possible count of ingredient (ex: 5x iron plate) 
   obj.configs = {}  -- config object in 'data-final-fixes.lua'
   return setmetatable(obj, RecipeRequirement)
@@ -28,10 +24,16 @@ function RecipeRequirement:partial_fit(ing_cost)
   -- Depth does not change even considering multiple count (ex: 2x iron plate)
   local min_depth = math.ceil(self.min_req.depth / 2)
   local difficulty_modifier = self.configs.difficulty
-  if self.min_req.depth <= 4 then -- Low depth adjustment
+
+  -- Low depth adjustments to prevent infinite loop
+  if self.min_req.depth <= 8 and difficulty_modifier == 3 then
+    difficulty_modifier = 2
+  end
+  if self.min_req.depth <= 4 then
     difficulty_modifier = math.max(difficulty_modifier - 1, 0)
   end
-  return math.min(min_depth + difficulty_modifier, 6) <= ing_cost.depth
+
+  return min_depth + difficulty_modifier <= ing_cost.depth
 end
 
 
@@ -58,22 +60,37 @@ end
 
 
 -- Check if min_req_mat <= cost_mat <= max_req_mat
-function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat)
+function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat, ing_weights)
   local min_req = min_req_mat[1]
   local max_req = max_req_mat[1]
   local cost = cost_mat[1]
   local dimension = #cost
+  local weighted_sum = 0 -- Amount of all resources
+  local deficits = 0 -- Amount of insufficient resources 
+  local extras = 0   -- Amount of extra resources (completely not required ones)
   for i = 1, dimension do
-    if not (min_req[i] <= cost[i] and cost[i] <= max_req[i]) then
+    if max_req[i] ~= 0 and cost[i] > max_req[i] then
       return nil -- Fail
     end
+    if max_req[i] == 0 then
+      extras = extras + cost[i] * ing_weights[i]
+    end
+    if cost[i] < min_req[i] then
+      deficits = deficits + (min_req[i] - cost[i]) * ing_weights[i]
+    end
+    weighted_sum = weighted_sum + cost[i] * ing_weights[i]
+  end
+
+  -- Extras should compensate for deficits, but not too much in total ingredients
+  if not (deficits < extras * 0.3 and extras < weighted_sum * 0.3) then
+    return nil -- Fail
   end
   
   -- If fit, return 'pack_count' (or 'm') which makes normalized least square
   for i = 1, dimension do
-    if min_req[i] ~= 0.0 then
+    if min_req[i] ~= 0.0 and min_req[i] <= cost[i] then
       cost[i] = cost[i] / min_req[i]
-    else -- TODO: adjust cost which does not appear in original pack
+    else -- Deficit resources & extra resources are not accounted
       cost[i] = -100
     end
   end
@@ -106,7 +123,10 @@ end
 -- and 1 <= m <= n where 'm' is amount of science pack produced (pack_count)
 function RecipeRequirement:_try_total_fit(ing_costs)
   -- Make min_req('r'), max_req('nr') vector
-  local ing_keys = ing_costs[1]:keys(true) -- no_depth, depth was considered in partial_fit()
+  local ing_keys = {}
+  local ing_weights = {}
+  for r, _ in pairs(self.resource_weights) do table.insert(ing_keys, r) end -- Get resources
+  for _, r in pairs(ing_keys) do table.insert(ing_weights, self.resource_weights[r]) end -- Get weights
   local min_req = self.min_req:toarray(ing_keys)
   min_req = matrix:new({min_req})
   local max_req = matrix.mulnum(min_req, self.max_ingredient_count)
@@ -132,7 +152,7 @@ function RecipeRequirement:_try_total_fit(ing_costs)
   local i = 1 -- cursor
   local n = self.max_ingredient_count
   while true do
-    local fit_result = self:_check_fit(min_req, max_req, fitting_cost)
+    local fit_result = self:_check_fit(min_req, max_req, fitting_cost, ing_weights)
     if fit_result then -- Success!
       return {ing_counts = ing_counts, pack_count = fit_result}
     end

@@ -17,8 +17,10 @@
 ## Compatibility
 - Incompatible with mods that **removes** vanilla science pack item
   - Mods that **add** science pack item is compatible (ex: Bob's mod)
-- Mods that adds ridiculous item chain might result in ridiculous recipe
-- Currently not compatible with Bob's mod & Angel's mod
+- Mods that adds ridiculous item chain or tech might result in ridiculous recipe
+  - For Bob's mod, Raw gems can appear in science pack 1
+  - For Bob's mod, Tungstic acid barrel can appear in science pack 2
+  - Turning on "double recipe" option is recommended in such mods, so that you can discard that recipe
 
 ## Possible Features
 - Generate alternative science pack recipe (which is harder, but low cost)

@@ -10,7 +10,8 @@ require("classes.RecipeRequirement")
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)
--- use resources unincluded in pack recipe (might error)
+-- strict generation mode (no extras compensation)
+-- generate 2 recipes (this is needed for big mods)
 
 total_raw.use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
 
@@ -24,6 +25,7 @@ recipes_of_item = {} -- table of (item name) -> (recipes)
 cost_of_recipe = {}  -- table of (recipe name) -> (recipe raw cost)
 
 resources = {} -- 'iron ore', 'coal', ...
+resource_weights = {} -- 'iron ore': 50, 'crude oil': 1, ...
 science_packs = {} -- 'science-pack-1', ...
 
 resources_whitelist = {"raw-wood"}
@@ -31,19 +33,25 @@ resources_blacklist = {}
 
 function init_tables(recipes)
   -- resources
-  local resources_set = {}
   local blacklist_set = {}
   for _, blacklist in pairs(resources_blacklist) do
     blacklist_set[blacklist] = true
   end
   for _, whitelist in pairs(resources_whitelist) do
     table.insert(resources, whitelist)
-    resources_set[whitelist] = true
+    resource_weights[whitelist] = 50
   end
   for _, resource_metadata in pairs(data.raw.resource) do
     local resource = resource_metadata.name
-    if not blacklist_set[resource] and not resources_set[resource] then
+    if not blacklist_set[resource] and not resource_weights[resource] then
       table.insert(resources, resource)
+      -- 50x fluid == 1x ore
+      if resource_metadata.category == "water" or resource_metadata.category == "basic-fluid"
+            or resource == "uranium-ore" then
+        resource_weights[resource] = 1
+      else
+        resource_weights[resource] = 50
+      end
     end
   end
 
@@ -51,7 +59,7 @@ function init_tables(recipes)
   local contained_items = {}
   for recipename, recipe in pairs(recipes) do
     for product, _ in pairs(getProducts(recipe)) do
-      if not contained_items[product] then
+      if not contained_items[product] and check_valid_item(product) then
         contained_items[product] = true
         table.insert(item_names, product)
       end
@@ -63,16 +71,12 @@ function init_tables(recipes)
   end
   
   -- cost_of_recipe
-  local resource_set = {}
-  for _, resource in ipairs(resources) do
-    resource_set[resource] = true
-  end
   for recipename, recipe in pairs(recipes) do
     local exclude = {}
     for product,amount in pairs(getProducts(recipe)) do
       exclude[product] = true
     end
-    local result = getRawIngredients(recipe, exclude, recipes_of_item, resource_set)
+    local result = getRawIngredients(recipe, exclude, recipes_of_item, resource_weights)
     if (result.ERROR_INFINITE_LOOP) then
       result = {
         ingredients = getIngredients(recipe),
@@ -121,11 +125,15 @@ end
 
 function insert_all_items(tbl, recipe)
   if recipe.result then
-    table.insert(tbl, recipe.result)
+    if check_valid_item(recipe.result) then
+      table.insert(tbl, recipe.result)
+    end
   end
   if recipe.results then
     for _, product in pairs(recipe.results) do
-      table.insert(tbl, product.name)
+      if check_valid_item(product.name) then
+        table.insert(tbl, product.name)
+      end
     end
   end
 end
@@ -227,6 +235,23 @@ function generate_filtered_recipes(pack_to_candidates)
     end
   end
   pack_to_candidates = table.unique(pack_to_candidates)
+end
+
+
+-- Return if this item can be science pack ingredient
+function check_valid_item(name)
+  -- TODO: more validity check
+  local p_item = data.raw.item[name]
+  if not p_item or not p_item.flags then
+    return true
+  else
+    for _, flag in pairs(p_item.flags) do
+      if flag == "hidden" then
+        return false
+      end
+    end
+  end
+  return true
 end
 
 
@@ -332,10 +357,15 @@ function main()
   local pack_to_candidates = {}
   generate_filtered_recipes(pack_to_candidates)
 
+  -- Add time to resource_weights
+  local resource_weights_t = {time = 0}
+  for k, v in pairs(resource_weights) do resource_weights_t[k] = v end
+
   for _, science_pack_name in ipairs(science_packs) do
     flog("Find ingredients: "..science_pack_name)
     if recipes_of_item[science_pack_name] then
       local requirement = RecipeRequirement.new()
+      requirement.resource_weights = resource_weights_t
       requirement.configs = configs
 
       local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
