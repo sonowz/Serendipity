@@ -18,10 +18,13 @@ data:extend({
     allowed_values = {"0.5x", "1x", "2x", "4x"},
     default_value = "1x"
   },
+  -- TODO: enable this setting after infinite loop detection is implemented
+  --[[
   {
     type = "bool-setting",
     name = "serendipity-strict-mode",
     setting_type = "startup",
     default_value = false
   }
+  --]]
 })

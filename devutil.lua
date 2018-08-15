@@ -77,6 +77,10 @@ function table.deepcompare(t1,t2,ignore_mt)
   return true
 end
 
+function ends_with(str, ending)
+  return ending == "" or str:sub(-#ending) == ending
+end
+
 -- Pseudorandom number generator
 -- https://stackoverflow.com/questions/20154991/generating-uniform-random-numbers-in-lua
 local A1, A2 = 727595, 798405  -- 5^17=D20*A1+A2

@@ -9,7 +9,6 @@ require("classes.RecipeRequirement")
 -- auto sync mod setting mismatch (currently seems impossible)
 -- detect infinite loops and get out
 -- sort data.raw to ensure deterministic behavior
--- remove barrel
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)
@@ -127,7 +126,8 @@ function init_configs()
     ["4x"] = 3
   }
   configs.difficulty = difficulty_table[settings.startup["serendipity-difficulty"].value]
-  configs.strict_mode = settings.startup["serendipity-strict-mode"].value
+  -- TODO: enable this setting after infinite loop detection is implemented
+  --configs.strict_mode = settings.startup["serendipity-strict-mode"].value 
 end
 
 
@@ -158,10 +158,11 @@ function generate_filtered_recipes(pack_to_candidates)
   end
   filtered_items = table.unique(filtered_items)
 
-  -- Filter science packs
+  -- Filter science packs and barrels
+  -- Barrels are not appropriate, because most mods put them in a mess
   for pack_name, _ in pairs(science_pack_meta) do
     for i, item in pairs(filtered_items) do
-      if item == pack_name then
+      if item == pack_name or ends_with(item, "-barrel") then
         table.remove(filtered_items, i)
       end
     end
@@ -366,7 +367,7 @@ function main()
       local requirement = RecipeRequirement.new()
       requirement.resource_weights = resource_weights_t
       requirement.difficulty = configs.difficulty
-      requirement.strict_mode = configs.strict_mode
+      requirement.strict_mode = science_pack_meta[science_pack_name].force_strict or configs.strict_mode
 
       local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
       local pack_cost = IngredientCost:new(resources, cost_of_recipe[pack_recipename])

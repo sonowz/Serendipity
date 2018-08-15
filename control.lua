@@ -7,7 +7,8 @@ script.on_init(function()
     randomseed = tostring(settings.startup["serendipity-randomseed"].value),
     ["expensive-recipe"] = tostring(settings.startup["serendipity-expensive-recipe"].value),
     difficulty = tostring(settings.startup["serendipity-difficulty"].value),
-    ["strict-mode"] = tostring(settings.startup["serendipity-strict-mode"].value)
+    -- TODO: enable this setting after infinite loop detection is implemented
+    --["strict-mode"] = tostring(settings.startup["serendipity-strict-mode"].value)
   }
 
   local recipes = game.forces.player.recipes
