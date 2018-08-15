@@ -6,11 +6,12 @@ script.on_init(function()
   global.serendipity_configs = {
     randomseed = tostring(settings.startup["serendipity-randomseed"].value),
     ["expensive-recipe"] = tostring(settings.startup["serendipity-expensive-recipe"].value),
-    difficulty = tostring(settings.startup["serendipity-difficulty"].value)
+    difficulty = tostring(settings.startup["serendipity-difficulty"].value),
+    ["strict-mode"] = tostring(settings.startup["serendipity-strict-mode"].value)
   }
 
   local recipes = game.forces.player.recipes
-  global.temp_ingredients = recipes["science-pack-1"].ingredients
+  global.temp_ingredients = recipes["science-pack-3"].ingredients
 end)
 
 script.on_configuration_changed(function()
@@ -24,7 +25,7 @@ script.on_configuration_changed(function()
     flog("Different setting detected")
   end
   local recipes = game.forces.player.recipes
-  if not table.deepcompare(global.temp_ingredients, recipes["science-pack-1"].ingredients) then
+  if not table.deepcompare(global.temp_ingredients, recipes["science-pack-3"].ingredients) then
     recipe_changed = true
     flog("Different recipe detected")
   end

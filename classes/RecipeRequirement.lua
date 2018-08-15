@@ -69,22 +69,30 @@ function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat, ing_we
   local weighted_sum = 0 -- Amount of all resources
   local deficits = 0 -- Amount of insufficient resources 
   local extras = 0   -- Amount of extra resources (completely not required ones)
-  for i = 1, dimension do
-    if max_req[i] ~= 0 and cost[i] > max_req[i] then
+  if self.strict_mode then
+    for i = 1, dimension do
+      if not (min_req[i] <= cost[i] and cost[i] <= max_req[i]) then
+        return nil --Fail
+      end
+    end
+  else -- Normal mode
+    for i = 1, dimension do
+      if max_req[i] ~= 0 and cost[i] > max_req[i] then
+        return nil -- Fail
+      end
+      if max_req[i] == 0 then
+        extras = extras + cost[i] * ing_weights[i]
+      end
+      if cost[i] < min_req[i] then
+        deficits = deficits + (min_req[i] - cost[i]) * ing_weights[i]
+      end
+      weighted_sum = weighted_sum + cost[i] * ing_weights[i]
+    end
+
+    -- Extras should compensate for deficits, but not too much in total ingredients
+    if not (deficits < extras * 0.3 and extras < weighted_sum * 0.3) then
       return nil -- Fail
     end
-    if max_req[i] == 0 then
-      extras = extras + cost[i] * ing_weights[i]
-    end
-    if cost[i] < min_req[i] then
-      deficits = deficits + (min_req[i] - cost[i]) * ing_weights[i]
-    end
-    weighted_sum = weighted_sum + cost[i] * ing_weights[i]
-  end
-
-  -- Extras should compensate for deficits, but not too much in total ingredients
-  if not (deficits < extras * 0.3 and extras < weighted_sum * 0.3) then
-    return nil -- Fail
   end
   
   -- If fit, return 'pack_count' (or 'm') which makes normalized least square

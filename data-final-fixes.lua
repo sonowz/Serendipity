@@ -9,17 +9,18 @@ require("classes.RecipeRequirement")
 -- auto sync mod setting mismatch (currently seems impossible)
 -- detect infinite loops and get out
 -- sort data.raw to ensure deterministic behavior
+-- remove barrel
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)
--- strict generation mode (no extras compensation)
 -- generate 2 recipes (this is needed for big mods)
 
 total_raw.use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
 
 -- Use 'configs' rather than native 'settings'
 configs = {
-  difficulty = 1
+  difficulty = 1,
+  strict_mode = false
 }
 
 item_names = {} -- array of item names
@@ -44,15 +45,39 @@ function init_tables(recipes)
     resource_weights[whitelist] = 50
   end
   for _, resource_metadata in pairs(data.raw.resource) do
-    local resource = resource_metadata.name
-    if not blacklist_set[resource] and not resource_weights[resource] then
-      table.insert(resources, resource)
-      -- 50x fluid == 1x ore
-      if resource_metadata.category == "water" or resource_metadata.category == "basic-fluid"
-            or resource == "uranium-ore" then
-        resource_weights[resource] = 1
-      else
-        resource_weights[resource] = 50
+    if resource_metadata.minable then
+      if resource_metadata.minable.result then
+        local resource = resource_metadata.minable.result
+        if not blacklist_set[resource] and not resource_weights[resource] then
+          table.insert(resources, resource)
+          -- 50x fluid == 1x ore
+          if resource_metadata.category == "water" or resource_metadata.category == "basic-fluid"
+                or resource == "uranium-ore" then
+            resource_weights[resource] = 1
+          else
+            resource_weights[resource] = 50
+          end
+        end
+      end
+      if resource_metadata.minable.results then
+        local prob_sum = 0
+        for _, result in pairs(resource_metadata.minable.results) do
+          if result.probability then prob_sum = prob_sum + result.probability end
+        end
+        for _, result in pairs(resource_metadata.minable.results) do
+          local resource = result.name
+          if not blacklist_set[resource] and not resource_weights[resource] then
+            table.insert(resources, resource)
+            local rarity = 1
+            if result.probability then rarity = result.probability / prob_sum end
+            -- 50x fluid == 1x ore
+            if (result.type and result.type == "fluid") or resource == "uranium-ore" then
+              resource_weights[resource] = 1 * rarity
+            else
+              resource_weights[resource] = 50 * rarity
+            end
+          end
+        end
       end
     end
   end
@@ -102,6 +127,7 @@ function init_configs()
     ["4x"] = 3
   }
   configs.difficulty = difficulty_table[settings.startup["serendipity-difficulty"].value]
+  configs.strict_mode = settings.startup["serendipity-strict-mode"].value
 end
 
 
@@ -340,7 +366,7 @@ function main()
       local requirement = RecipeRequirement.new()
       requirement.resource_weights = resource_weights_t
       requirement.difficulty = configs.difficulty
-      --requirement.strict_mode = configs.strict_mode
+      requirement.strict_mode = configs.strict_mode
 
       local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
       local pack_cost = IngredientCost:new(resources, cost_of_recipe[pack_recipename])

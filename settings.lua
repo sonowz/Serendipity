@@ -17,5 +17,11 @@ data:extend({
     setting_type = "startup",
     allowed_values = {"0.5x", "1x", "2x", "4x"},
     default_value = "1x"
+  },
+  {
+    type = "bool-setting",
+    name = "serendipity-strict-mode",
+    setting_type = "startup",
+    default_value = false
   }
 })
