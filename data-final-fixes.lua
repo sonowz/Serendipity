@@ -1,4 +1,5 @@
 require("total-raw")
+require("science-pack")
 require("devutil")
 require("classes.IngredientCost")
 require("classes.RecipeRequirement")
@@ -7,6 +8,7 @@ require("classes.RecipeRequirement")
 -- preprocess recipes (remove too cheap/expensive)
 -- auto sync mod setting mismatch (currently seems impossible)
 -- detect infinite loops and get out
+-- sort data.raw to ensure deterministic behavior
 
 -- Configs
 -- auto seed randomization (use map seed?) (seems hard)
@@ -26,7 +28,7 @@ cost_of_recipe = {}  -- table of (recipe name) -> (recipe raw cost)
 
 resources = {} -- 'iron ore', 'coal', ...
 resource_weights = {} -- 'iron ore': 50, 'crude oil': 1, ...
-science_packs = {} -- 'science-pack-1', ...
+science_pack_meta = {} -- science pack metadata
 
 resources_whitelist = {"raw-wood"}
 resources_blacklist = {}
@@ -89,27 +91,7 @@ function init_tables(recipes)
   end
 
   -- science_packs
-  -- Dynamic version
-  --[[
-  science_packs = {}
-  for _, item in pairs(data.raw.tool) do
-    if item.subgroup and item.subgroup == "science-pack" then
-      table.insert(science_packs, item.name)
-    end
-  end
-  table.sort(science_packs) -- Required to make recipe deterministic
-  --]]
-  -- Static version
-  -- See: todo in 'science_pack_depends'
-  science_packs = {
-    "science-pack-1", 
-    "science-pack-2", 
-    "science-pack-3", 
-    "military-science-pack",
-    "production-science-pack",
-    "high-tech-science-pack"
-  }
-  table.sort(science_packs) -- Required to make recipe deterministic
+  science_pack_meta = get_base_science_pack_meta()
 end
 
 function init_configs()
@@ -151,27 +133,13 @@ function generate_filtered_recipes(pack_to_candidates)
   filtered_items = table.unique(filtered_items)
 
   -- Filter science packs
-  for _, pack in pairs(science_packs) do
+  for pack_name, _ in pairs(science_pack_meta) do
     for i, item in pairs(filtered_items) do
-      if item == pack then
+      if item == pack_name then
         table.remove(filtered_items, i)
       end
     end
   end
-
-  -- Write down all packs that are prerequisites
-  -- ex) Production and high-tech mutually require each other, since they are mutually independant
-  -- This can't be generated dynamically,
-  -- since it requires implicated dependency by human
-  -- TODO: find a way to embrace new science pack mod
-  local science_pack_depends = {
-    ["science-pack-1"] = {},
-    ["science-pack-2"] = {"science-pack-1"},
-    ["science-pack-3"] = {"science-pack-1", "science-pack-2"},
-    ["military-science-pack"] = {"science-pack-1", "science-pack-2"},
-    ["production-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3", "military-science-pack", "high-tech-science-pack"},
-    ["high-tech-science-pack"] = {"science-pack-1", "science-pack-2", "science-pack-3", "military-science-pack", "production-science-pack"},
-  }
 
   -- Stores science packs to exclude from candidates
   local recipe_requires = {}
@@ -181,9 +149,9 @@ function generate_filtered_recipes(pack_to_candidates)
     for _, ing in pairs(tech.unit.ingredients) do
       local pack = ing[1]
       packs_set[pack] = true
-      if science_pack_depends[pack] then
-        for _, dependant in pairs(science_pack_depends[pack]) do
-          packs_set[dependant] = true
+      if science_pack_meta[pack] and science_pack_meta[pack].depends then
+        for _, dependent in pairs(science_pack_meta[pack].depends) do
+          packs_set[dependent] = true
         end
       end
     end
@@ -213,11 +181,11 @@ function generate_filtered_recipes(pack_to_candidates)
   end
     
   -- TODO: improvement in recipe -> item?
-  for _, pack in pairs(science_packs) do
-    pack_to_candidates[pack] = {}
+  for pack_name, _ in pairs(science_pack_meta) do
+    pack_to_candidates[pack_name] = {}
   end
   for _, item_name in pairs(filtered_items) do
-    for _, pack in pairs(science_packs) do
+    for pack, _ in pairs(science_pack_meta) do
       if not item_requires[item_name] then -- It is unlocked from start
         -- TODO: basic filter of non-craftable
         -- Needs thorough filtering of items & recipes from beginning of the mod
@@ -361,12 +329,18 @@ function main()
   local resource_weights_t = {time = 0}
   for k, v in pairs(resource_weights) do resource_weights_t[k] = v end
 
+  -- Sort science pack for deterministic behavior
+  local science_packs = {}
+  for name, _ in pairs(science_pack_meta) do table.insert(science_packs, name) end
+  table.sort(science_packs)
+
   for _, science_pack_name in ipairs(science_packs) do
     flog("Find ingredients: "..science_pack_name)
     if recipes_of_item[science_pack_name] then
       local requirement = RecipeRequirement.new()
       requirement.resource_weights = resource_weights_t
-      requirement.configs = configs
+      requirement.difficulty = configs.difficulty
+      --requirement.strict_mode = configs.strict_mode
 
       local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
       local pack_cost = IngredientCost:new(resources, cost_of_recipe[pack_recipename])

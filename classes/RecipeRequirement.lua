@@ -10,10 +10,11 @@ RecipeRequirement.__index = RecipeRequirement
 function RecipeRequirement:new()
   local obj = {}
   obj.min_req = nil -- IngredientCost class
-  obj.resource_weights = nil -- list of resources and weights used in _check_fit()
-                             -- this should include "time", but not "depth"
-  obj.max_ingredient_count = 5 -- max possible count of ingredient (ex: 5x iron plate) 
-  obj.configs = {}  -- config object in 'data-final-fixes.lua'
+  obj.resource_weights = nil -- List of resources and weights used in _check_fit()
+                             -- This should include "time", but not "depth
+  obj.difficulty = nil  -- Difficulty set by config
+  obj.strict_mode = nil -- Enable strict mode, which only allows resources from original recipe
+  obj.max_ingredient_count = 5 -- Max possible count of ingredient (ex: 5x iron plate) 
   return setmetatable(obj, RecipeRequirement)
 end
 
@@ -23,7 +24,7 @@ function RecipeRequirement:partial_fit(ing_cost)
   -- Currently only check depth
   -- Depth does not change even considering multiple count (ex: 2x iron plate)
   local min_depth = math.ceil(self.min_req.depth / 2)
-  local difficulty_modifier = self.configs.difficulty
+  local difficulty_modifier = self.difficulty
 
   -- Low depth adjustments to prevent infinite loop
   if self.min_req.depth <= 8 and difficulty_modifier == 3 then
@@ -55,7 +56,7 @@ function RecipeRequirement:_check_depth_constraint(ing_costs)
   for _, ing_cost in pairs(ing_costs) do
     ing_max_depth = math.max(ing_max_depth, ing_cost["depth"])
   end
-  return ing_max_depth <= self.min_req.depth + self.configs.difficulty
+  return ing_max_depth <= self.min_req.depth + self.difficulty
 end
 
 
