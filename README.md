@@ -22,3 +22,4 @@
 
 ## Possible Features
 - Generate alternative science pack recipe (which is harder, but low cost)
+- Support fixed recipe so that game doesn't break when items are changed by other mods
