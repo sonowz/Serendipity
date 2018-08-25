@@ -113,14 +113,12 @@ function RecipeRequirement:_check_fit(min_req_mat, max_req_mat, cost_mat, ing_we
     end
     table.insert(least_squares, least_square)
   end
-  local index, min_ls = 1, least_squares[1]
-  for i, least_square in pairs(least_squares) do
-    if least_square < min_ls then
-      index = i
-      min_ls = least_square
+  local min_ls = table.min(least_squares)
+  for i, ls in pairs(least_squares) do
+    if ls == min_ls then
+      return i -- Best science pack count
     end
   end
-  return index -- Best science pack count
 end
 
 
@@ -130,30 +128,25 @@ end
 --                                     'n' is 'self.max_ingredient_count'
 -- The result is 'a', 'b', 'c', ..., which are amount of ingredient in science pack recipe,
 -- and 1 <= m <= n where 'm' is amount of science pack produced (pack_count)
+-- 'ing_costs': {x, y, z ...}
 function RecipeRequirement:_try_total_fit(ing_costs)
   -- Make min_req('r'), max_req('nr') vector
-  local ing_keys = {}
-  local ing_weights = {}
-  for r, _ in pairs(self.resource_weights) do table.insert(ing_keys, r) end -- Get resources
-  for _, r in pairs(ing_keys) do table.insert(ing_weights, self.resource_weights[r]) end -- Get weights
+  local ing_keys = table.keys(self.resource_weights) -- Get resources
+  local ing_weights = table.map(ing_keys, function(r) return self.resource_weights[r] end) -- Get weights
   local min_req = self.min_req:toarray(ing_keys)
   min_req = matrix:new({min_req})
   local max_req = matrix.mulnum(min_req, self.max_ingredient_count)
 
   -- Make ing_cost vectors
-  local ing_mats = {}
-  for _, ing_cost in pairs(ing_costs) do
-    table.insert(ing_mats, matrix:new({ing_cost:toarray(ing_keys)}))
-  end
+  local ing_mat = table.map(ing_costs, function(ing_cost)
+    return matrix:new({ing_cost:toarray(ing_keys)})
+  end)
 
   -- fitting_cost: ax + by + cz + ...
-  local ing_counts = {}; -- {1, 1, 1, ..}
-  local fitting_cost = {}; -- {0.0, 0.0, 0.0, ..} vector
-  for _ = 1, #ing_costs do table.insert(ing_counts, 1) end
-  for _ = 1, #ing_keys do table.insert(fitting_cost, 0.0) end
-  fitting_cost = matrix:new({fitting_cost})
-  for _, ing_mat in pairs(ing_mats) do
-    fitting_cost = matrix.add(fitting_cost, ing_mat)
+  local ing_counts = table.map(ing_costs, const(1)) -- {1, 1, 1, ...}
+  local fitting_cost = matrix:new({table.map(ing_keys, const(0.0))}) -- {0, 0, 0, ...} vector
+  for _, ing_vec in pairs(ing_mat) do
+    fitting_cost = matrix.add(fitting_cost, ing_vec)
   end
 
   -- Here, brute-force all possible cases
@@ -166,17 +159,17 @@ function RecipeRequirement:_try_total_fit(ing_costs)
       return {ing_counts = ing_counts, pack_count = fit_result}
     end
     ing_counts[i] = ing_counts[i] + 1
-    fitting_cost = matrix.add(fitting_cost, ing_mats[i])
-    if ing_counts[i] > n then
+    fitting_cost = matrix.add(fitting_cost, ing_mat[i])
+    if ing_counts[i] > n then -- Carry
       while ing_counts[i] > n do
         -- Rollback
         ing_counts[i] = 1
-        fitting_cost = matrix.sub(fitting_cost, matrix.mulnum(ing_mats[i], n))
-        -- Carry
+        fitting_cost = matrix.sub(fitting_cost, matrix.mulnum(ing_mat[i], n))
+        -- Apply carry
         i = i + 1
         if i > #ing_costs then return nil end -- Fail!
         ing_counts[i] = ing_counts[i] + 1
-        fitting_cost = matrix.add(fitting_cost, ing_mats[i])
+        fitting_cost = matrix.add(fitting_cost, ing_mat[i])
       end
       i = 1
     end

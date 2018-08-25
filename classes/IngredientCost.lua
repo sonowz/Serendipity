@@ -29,10 +29,7 @@ end
 
 
 function IngredientCost:clone()
-  local obj = {}
-  for k, v in pairs(self) do
-    obj[k] = v
-  end
+  local obj = table.deepcopy(self)
   return setmetatable(obj, IngredientCost)
 end
 
@@ -68,19 +65,17 @@ end
 
 
 function IngredientCost:keys(no_depth)
-  local keyset = {}
-  for k, _ in pairs(self) do
-    if not (no_depth and k == "depth") then
-      table.insert(keyset, k)
-    end
+  local keys = table.keys(self)
+  if no_depth then
+    table.remove(keys, "depth")
   end
-  return keyset
+  return keys
 end
 
 
-function IngredientCost:toarray(keyset)
+function IngredientCost:toarray(keys)
   local arr = {}
-  for i, key in ipairs(keyset) do
+  for i, key in ipairs(keys) do
     arr[i] = self[key]
   end
   return arr
