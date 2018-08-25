@@ -1,3 +1,7 @@
+require('stdlib/data/recipe')
+require('stdlib/string')
+require('stdlib/table')
+
 require("total-raw")
 require("science-pack")
 require("devutil")
@@ -35,10 +39,7 @@ resources_blacklist = {}
 
 function init_tables(recipes)
   -- resources
-  local blacklist_set = {}
-  for _, blacklist in pairs(resources_blacklist) do
-    blacklist_set[blacklist] = true
-  end
+  local blacklist_set = table.arr_to_bool(resources_blacklist)
   for _, whitelist in pairs(resources_whitelist) do
     table.insert(resources, whitelist)
     resource_weights[whitelist] = 50
@@ -82,19 +83,15 @@ function init_tables(recipes)
   end
 
   -- recipes_of_item
-  local contained_items = {}
-  for recipename, recipe in pairs(recipes) do
+  for _, recipe in pairs(recipes) do
     for product, _ in pairs(getProducts(recipe)) do
-      if not contained_items[product] and check_valid_item(product) then
-        contained_items[product] = true
-        table.insert(item_names, product)
-      end
       if not recipes_of_item[product] then
         recipes_of_item[product] = {}
       end
       table.insert(recipes_of_item[product], recipe)
     end
   end
+  item_names = table.filter(table.keys(recipes_of_item), check_valid_item)
   
   -- cost_of_recipe
   for recipename, recipe in pairs(recipes) do
@@ -159,14 +156,11 @@ function generate_filtered_recipes(pack_to_candidates)
   filtered_items = table.unique(filtered_items)
 
   -- Filter science packs and barrels
-  -- Barrels are not appropriate, because most mods put them in a mess
-  for pack_name, _ in pairs(science_pack_meta) do
-    for i, item in pairs(filtered_items) do
-      if item == pack_name or ends_with(item, "-barrel") then
-        table.remove(filtered_items, i)
-      end
-    end
-  end
+  -- Barrels should be filtered, because most mods put them in a mess
+  filtered_items = table.filter(filtered_items, function(item)
+    local cond = (science_pack_meta[item] ~= nil) or string.ends_with(item, "-barrel")
+    return not cond
+  end)
 
   -- Stores science packs to exclude from candidates
   local recipe_requires = {}
@@ -195,16 +189,9 @@ function generate_filtered_recipes(pack_to_candidates)
   local item_requires = {}
   for _, item_name in pairs(item_names) do
     -- TODO: better minimal pack algorithm
-    local min_requires = recipe_requires[(recipes_of_item[item_name][1]).name]
-    if min_requires then
-      for _, recipe in pairs(recipes_of_item[item_name]) do
-        local requires = recipe_requires[recipe.name]
-        if #requires < #min_requires then
-          min_requires = requires
-        end
-      end
-    end
-    item_requires[item_name] = min_requires
+    local requires = table.map(recipes_of_item[item_name], function(recipe) return recipe_requires[recipe.name] or {} end)
+    local min_req_count = table.min(table.map(requires, function(req) return #req end))
+    item_requires[item_name] = table.find(requires, function(req) return #req == min_req_count end)
   end
     
   -- TODO: improvement in recipe -> item?
@@ -217,11 +204,11 @@ function generate_filtered_recipes(pack_to_candidates)
         -- TODO: basic filter of non-craftable
         -- Needs thorough filtering of items & recipes from beginning of the mod
         if recipes_of_item[item_name] then
-          for _, recipe in ipairs(recipes_of_item[item_name]) do
-            if recipe.enabled == nil or recipe.enabled == true then
-              table.insert(pack_to_candidates[pack], item_name)
-              break
-            end
+          local is_start_item = table.any(recipes_of_item[item_name], function(recipe)
+            return recipe.enabled == nil or recipe.enabled == true
+          end)
+          if is_start_item then
+            table.insert(pack_to_candidates[pack], item_name)
           end
         end
       elseif not item_requires[item_name][pack] then -- Tech tree validated
@@ -240,10 +227,8 @@ function check_valid_item(name)
   if not p_item or not p_item.flags then
     return true
   else
-    for _, flag in pairs(p_item.flags) do
-      if flag == "hidden" then
-        return false
-      end
+    if table.find(p_item.flags, function(flag) return flag == "hidden" end) then
+      return false
     end
   end
   return true
@@ -258,7 +243,7 @@ function get_random_items(num, candidates)
       local rand_index = math.ceil(rand() * #candidates)
       local item = candidates[rand_index]
       local fail = false
-      for j = 1,i-1,1 do
+      for j = 1,i-1 do
         if items[j] == item then
           fail = true
           break
@@ -307,7 +292,7 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
       end
     end
     
-    if partial_fit_fail <= 1 then
+    if partial_fit_fail <= 1 then -- One ingredient can pass partial fit
       local fit_result = requirement:total_fit(costs)
       if fit_result then
         flog(costs)
@@ -353,13 +338,10 @@ function main()
   generate_filtered_recipes(pack_to_candidates)
 
   -- Add time to resource_weights
-  local resource_weights_t = {time = 0}
-  for k, v in pairs(resource_weights) do resource_weights_t[k] = v end
+  local resource_weights_t = table.merge(resource_weights, {time = 0})
 
   -- Sort science pack for deterministic behavior
-  local science_packs = {}
-  for name, _ in pairs(science_pack_meta) do table.insert(science_packs, name) end
-  table.sort(science_packs)
+  local science_packs = table.keys(science_pack_meta, true) -- sorted: true
 
   for _, science_pack_name in ipairs(science_packs) do
     flog("Find ingredients: "..science_pack_name)

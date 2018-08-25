@@ -56,6 +56,33 @@ function table.unique(tbl)
   return res
 end
 
+-- From https://github.com/Afforess/Factorio-Stdlib/blob/536e9a7799aaa5cc07242c64a6b4c0cc076f7af8/stdlib/utils/table.lua
+--- For all string or number values in an array map them to a key = true table
+-- @usage local a = {"v1", "v2"}
+-- table.array_to_dict_bool(a) -- return {["v1"] = true, ["v2"]= true}
+-- @tparam table tbl the table to convert
+-- @treturn table the converted table
+function table.arr_to_bool(tbl)
+  local newtbl = {}
+  for _, v in pairs(tbl) do
+    if type(v) == "string" or type(v) == "number" then
+      newtbl[v] = true
+    end
+  end
+  return newtbl
+end
+
+-- {{k, v}, {k, v}} -> {k: {v1, v2}, k: {v1, v2}}
+function table.from_assoc(tbl)
+  local newtbl = {}
+  for _, x in ipairs(tbl) do
+    local k, v = x[0], x[1]
+    if not newtbl[k] then newtbl[k] = {} end
+    table.insert(newtbl[k], v)
+  end
+  return newtbl
+end
+
 --http://snippets.luacode.org/snippets/Deep_Comparison_of_Two_Values_3
 function table.deepcompare(t1,t2,ignore_mt)
   local ty1 = type(t1)
@@ -75,10 +102,6 @@ function table.deepcompare(t1,t2,ignore_mt)
   if v1 == nil or not table.deepcompare(v1,v2) then return false end
   end
   return true
-end
-
-function ends_with(str, ending)
-  return ending == "" or str:sub(-#ending) == ending
 end
 
 -- Pseudorandom number generator

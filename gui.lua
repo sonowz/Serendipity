@@ -1,3 +1,5 @@
+local Gui = require('stdlib/gui/gui')
+
 function gui_different_setting_error (parent, changes)
   local box = parent.center.add{
     type="frame",
