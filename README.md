@@ -1,7 +1,17 @@
 # Serendipity : Random Science Pack Recipes in Factorio
 
+![factorio 0.16](https://badgen.net/badge/factorio/0.16/orange)
+![release](https://badgen.net/github/release/dnsdhrj/serendipity)
+
+<img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/sci1-1.png" align="left">
+<img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/sci1-2.png" align="left">
+<img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/sci2.png">
+<img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/sci3.png" align="left">
+<img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/hitech.png">
+
+
 ## Features
-- Random science pack recipe that is highly resonable
+- Random science pack recipe that is highly *reasonable*
 - You will get recipe in which is similar to original recipe:
   - Total raw resource count (ex: `iron ore`, `coal`, `crude oil`)
   - Total time to produce
