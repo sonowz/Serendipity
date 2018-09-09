@@ -34,8 +34,9 @@ resources = {} -- 'iron ore', 'coal', ...
 resource_weights = {} -- 'iron ore': 50, 'crude oil': 1, ...
 science_pack_meta = {} -- science pack metadata
 
-resources_whitelist = {"raw-wood"}
-resources_blacklist = {}
+-- TODO: insert 'raw wood' if greenhouse-ish mod is on
+resources_whitelist = {}
+resources_blacklist = {"uranium-ore"}
 
 function init_tables(recipes)
   -- resources
