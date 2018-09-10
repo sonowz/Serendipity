@@ -1,7 +1,7 @@
 # Serendipity : Random Science Pack Recipes in Factorio
 
-![factorio 0.16](https://badgen.net/badge/factorio/0.16/orange)
-![release](https://badgen.net/github/release/dnsdhrj/serendipity)
+<a href="https://www.factorio.com"><img src="https://badgen.net/badge/factorio/0.16/orange"/></a>
+<a href="https://github.com/dnsdhrj/Serendipity/releases"><img src="https://badgen.net/github/release/dnsdhrj/serendipity"/></a>
 
 <img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/sci1-1.png" align="left">
 <img src="https://github.com/dnsdhrj/Serendipity/blob/master/doc/images/sci1-2.png" align="left">
