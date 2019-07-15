@@ -1,6 +1,11 @@
+local table = require('__stdlib__/stdlib/utils/table')
+require('__stdlib__/stdlib/config/config')
+
 require("constants")
 require("gui")
 require("devutil")
+
+local configs
 
 script.on_init(function()
   global.serendipity_configs = {
@@ -10,6 +15,7 @@ script.on_init(function()
     -- TODO: enable this setting after infinite loop detection is implemented
     --["strict-mode"] = tostring(settings.startup["serendipity-strict-mode"].value)
   }
+  configs = Config.new(global.serendipity_configs)
 
   local recipes = game.forces.player.recipes
   global.temp_ingredients = recipes["science-pack-3"].ingredients
@@ -19,14 +25,14 @@ script.on_configuration_changed(function()
   local recipe_changed = true
 
   local changed_settings = {}
-  for name, value in pairs(global.serendipity_configs) do
+  for name, value in pairs(configs) do
     if tostring(settings.startup["serendipity-"..name].value) ~= value then
       changed_settings[name] = value
     end
     flog("Different setting detected")
   end
   local recipes = game.forces.player.recipes
-  if not table.deepcompare(global.temp_ingredients, recipes["science-pack-3"].ingredients) then
+  if not table.deep_compare(global.temp_ingredients, recipes["science-pack-3"].ingredients) then
     recipe_changed = true
     flog("Different recipe detected")
   end

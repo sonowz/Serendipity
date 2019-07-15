@@ -1,6 +1,5 @@
-require('stdlib/data/recipe')
-require('stdlib/string')
-require('stdlib/table')
+local table = require('__stdlib__/stdlib/utils/table')
+require('__stdlib__/stdlib/config/config')
 
 require("total-raw")
 require("science-pack")
@@ -21,10 +20,10 @@ require("classes.RecipeRequirement")
 total_raw.use_expensive_recipe = settings.startup["serendipity-expensive-recipe"].value
 
 -- Use 'configs' rather than native 'settings'
-configs = {
+configs = Config.new({
   difficulty = 1,
   strict_mode = false
-}
+})
 
 item_names = {} -- array of item names
 recipes_of_item = {} -- table of (item name) -> (recipes)
@@ -40,7 +39,7 @@ resources_blacklist = {"uranium-ore"}
 
 function init_tables(recipes)
   -- resources
-  local blacklist_set = table.arr_to_bool(resources_blacklist)
+  local blacklist_set = table.arr_to_dictionary(resources_blacklist, true)
   for _, whitelist in pairs(resources_whitelist) do
     table.insert(resources, whitelist)
     resource_weights[whitelist] = 50
@@ -123,9 +122,9 @@ function init_configs()
     ["2x"] = 2,
     ["4x"] = 3
   }
-  configs.difficulty = difficulty_table[settings.startup["serendipity-difficulty"].value]
+  configs.set("difficulty", difficulty_table[settings.startup["serendipity-difficulty"].value])
   -- TODO: enable this setting after infinite loop detection is implemented
-  --configs.strict_mode = settings.startup["serendipity-strict-mode"].value 
+  --configs.set("strict_mode", settings.startup["serendipity-strict-mode"].value)
 end
 
 
@@ -282,7 +281,7 @@ function set_ingredients(requirement, selected_resources, science_pack_recipe, c
     while not one_or_less_fluid(ingredients) do
       ingredients = get_random_items(ingredients_count, candidates)
     end
-    flog(table.tostring(ingredients))
+    flog(ingredients)
     local costs = {}
     local partial_fit_fail = 0
     for i, ingredient in ipairs(ingredients) do
@@ -349,12 +348,12 @@ function main()
     if recipes_of_item[science_pack_name] then
       local requirement = RecipeRequirement.new()
       requirement.resource_weights = resource_weights_t
-      requirement.difficulty = configs.difficulty
-      requirement.strict_mode = science_pack_meta[science_pack_name].force_strict or configs.strict_mode
+      requirement.difficulty = configs.get("difficulty")
+      requirement.strict_mode = science_pack_meta[science_pack_name].force_strict or configs.get("strict_mode")
 
       local pack_recipename = recipes_of_item[science_pack_name][1].name -- TODO: fix
       local pack_cost = IngredientCost:new(resources, cost_of_recipe[pack_recipename])
-      local cost_muiltiplier = math.pow(2, configs.difficulty - 1) -- Same as settings value
+      local cost_muiltiplier = math.pow(2, configs.get("difficulty") - 1) -- Same as settings value
       pack_cost = pack_cost:mul(cost_muiltiplier)
       requirement.min_req = pack_cost
 
